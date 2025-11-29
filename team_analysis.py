@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from rpi_team_name_aliases import RPI_TEAM_NAME_ALIASES
+from settings import RPI_TEAM_NAME_ALIASES
 from utils import (
     fetch_html,
     normalize_player_name,

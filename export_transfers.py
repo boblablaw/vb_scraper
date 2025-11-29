@@ -4,7 +4,7 @@
 import csv
 import os
 from pathlib import Path
-from transfers_config import OUTGOING_TRANSFERS
+from settings import OUTGOING_TRANSFERS
 
 
 def export_to_csv():

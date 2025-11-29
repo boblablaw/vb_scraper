@@ -7,7 +7,7 @@ import time
 import os
 from typing import Any, Dict, List
 
-from teams import TEAMS
+from settings import TEAMS
 from utils import excel_unprotect
 from rpi_lookup import build_rpi_lookup
 from team_analysis import analyze_team

@@ -18,7 +18,7 @@ INPUT_TSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.ts
 OUTPUT_TSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2026.tsv")
 OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2026.csv")
 
-from transfers_config import OUTGOING_TRANSFERS
+from settings import OUTGOING_TRANSFERS
 
 def excel_unprotect(value: Any) -> str:
     """
