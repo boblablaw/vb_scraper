@@ -140,6 +140,11 @@ def parse_coaches_from_html(html: str) -> list[dict]:
     seen_names: set[str] = set()
 
     for a in soup.find_all("a", href=True):
+        # Skip mailto: and tel: links - they're not names
+        href = a.get("href", "")
+        if href.startswith("mailto:") or href.startswith("tel:"):
+            continue
+        
         name = normalize_text(a.get_text())
         if not name:
             continue
