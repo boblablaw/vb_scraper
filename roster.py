@@ -388,6 +388,9 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
     We do a very simple JSON sniff looking for arrays of objects with
     name / position / height / class-like fields.
     
+    Also handles embedded JavaScript arrays with detailed player data
+    (e.g., George Mason format with height_feet, position_short, academic_year_short).
+    
     IMPORTANT: Filters out non-volleyball players if >30 players are found
     (likely multi-sport JSON data).
     """
@@ -404,6 +407,78 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
             return False
         pos_lower = pos.lower().strip()
         return any(vb_pos in pos_lower for vb_pos in VALID_VB_POSITIONS)
+    
+    # First, try to find embedded JavaScript array with detailed player objects
+    # Look for arrays containing objects with fields like "height_feet", "position_short", "academic_year_short"
+    pattern = r'\[\s*\{[^}]{0,500}"height_feet"[^}]{0,500}"position_short"'
+    match = re.search(pattern, html)
+    
+    if match:
+        logger.info("Found embedded JavaScript roster array at position %d", match.start())
+        start_pos = match.start()
+        
+        # Count brackets to find the array end
+        bracket_count = 0
+        i = start_pos
+        while i < len(html) and i < start_pos + 100000:  # Safety limit
+            if html[i] == '[':
+                bracket_count += 1
+            elif html[i] == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    break
+            i += 1
+        
+        if bracket_count == 0:
+            end_pos = i + 1
+            json_str = html[start_pos:end_pos]
+            
+            try:
+                data = json.loads(json_str)
+                if isinstance(data, list):
+                    logger.info("Parsed embedded roster array with %d items", len(data))
+                    
+                    for obj in data:
+                        if not isinstance(obj, dict):
+                            continue
+                        
+                        # Extract name
+                        first_name = obj.get('first_name', '')
+                        last_name = obj.get('last_name', '')
+                        name = _clean(f"{first_name} {last_name}".strip())
+                        
+                        if not name:
+                            continue
+                        
+                        # Extract position
+                        position = _clean(obj.get('position_short', '') or obj.get('position_long', ''))
+                        
+                        # Extract height from height_feet and height_inches
+                        height_feet = obj.get('height_feet')
+                        height_inches = obj.get('height_inches')
+                        height_raw = ""
+                        if height_feet and height_inches is not None:
+                            height_raw = f"{height_feet}-{height_inches}"
+                        
+                        # Extract class/year
+                        class_raw = _clean(
+                            obj.get('academic_year_short', '')
+                            or obj.get('academic_year_long', '')
+                            or obj.get('class', '')
+                        )
+                        
+                        players.append({
+                            "name": name,
+                            "position": position,
+                            "class_raw": class_raw,
+                            "height_raw": height_raw,
+                        })
+                    
+                    if players:
+                        return players
+                        
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.debug("Could not parse embedded roster array as JSON: %s", e)
 
     # 1) application/ld+json blocks
     soup = BeautifulSoup(html, "html.parser")
