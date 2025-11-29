@@ -172,7 +172,7 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
 
         name_idx = find_col(["name", "player"])
         pos_idx = find_col(["pos", "position"])
-        class_idx = find_col(["class", "year", "eligibility"])
+        class_idx = find_col(["class", "year", "yr", "eligibility", "cl"])
         height_idx = find_col(["ht", "height"])
 
         if name_idx is None or pos_idx is None:
