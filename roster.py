@@ -198,9 +198,18 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
             class_raw = get(class_idx)
             height_raw = get(height_idx)
 
-            # Rudimentary staff filter: skip obvious staff/coaches rows
+            # Staff filter: skip obvious staff/coaches rows
             lower_row = " ".join(texts).lower()
+            lower_pos = position.lower()
+            
+            # Skip if contains coach (but not if it's about volleyball coaching)
             if "coach" in lower_row and "volleyball" not in lower_row:
+                continue
+            
+            # Skip if position contains staff keywords
+            staff_keywords = ['director', 'coordinator', 'trainer', 'advisor', 'communications', 
+                            'operations', 'strength', 'conditioning', 'manager', 'admin']
+            if any(kw in lower_pos for kw in staff_keywords):
                 continue
 
             if not name:
