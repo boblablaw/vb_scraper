@@ -207,3 +207,26 @@ Player Name - School Name - Position (Club)
 ## Logging
 
 Logging is configured in `logging_utils.py`. Default level is `INFO`. Logs go to both console and `exports/scraper.log`. Change level to `logging.DEBUG` in `run_scraper.py` for verbose output.
+
+## Testing
+
+The project includes unit tests for the settings package to verify configuration integrity.
+
+### Running Tests
+
+```bash
+# Run all tests
+python test_settings.py
+```
+
+### Test Coverage
+
+The test suite (`test_settings.py`) verifies:
+
+1. **Settings Package Imports** — All configuration data (TEAMS, OUTGOING_TRANSFERS, RPI_TEAM_NAME_ALIASES, RAW_INCOMING_TEXT) is correctly imported and accessible
+2. **Dependent Module Imports** — All modules can successfully import configuration data from the settings package
+3. **Data Consistency** — Configuration data maintains internal consistency (unique team names, valid URLs, etc.)
+
+Tests are designed to work with or without optional dependencies (pandas, requests, beautifulsoup4). Tests requiring missing dependencies will be automatically skipped.
+
+See `TEST_README.md` for detailed test documentation.

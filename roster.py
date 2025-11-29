@@ -141,6 +141,94 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
     return players
 
 
+# ===================== SIDEARM ROSTER-LIST-ITEM LAYOUT =====================
+
+
+def parse_sidearm_roster_list_items(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    """
+    Parse SIDEARM roster-list-item layout (used by Iowa and similar sites).
+    
+    Structure:
+        <li class="roster-list-item">
+            <a class="roster-list-item__title">Player Name</a>
+            <div class="roster-list-item__profile-fields">RS So.5′7″</div>
+            <div class="roster-list-item__profile-fields">LHometown, State...</div>
+            <span class="roster-player-list-profile-field--height">5′7″</span>
+        </li>
+    
+    Returns list of dicts with keys: name, position, class_raw, height_raw.
+    """
+    players: List[Dict[str, str]] = []
+    
+    # Look for li.roster-list-item
+    items = soup.find_all('li', class_='roster-list-item')
+    
+    if not items:
+        return players
+    
+    for item in items:
+        # Name from .roster-list-item__title
+        name_tag = item.find(class_='roster-list-item__title')
+        name = _clean(name_tag.get_text()) if name_tag else ""
+        
+        if not name:
+            continue
+        
+        # Height from .roster-player-list-profile-field--height
+        height_tag = item.find(class_=lambda x: x and 'roster-player-list-profile-field--height' in x)
+        height_raw = _clean(height_tag.get_text()) if height_tag else ""
+        
+        # Position and class are in .roster-list-item__profile-fields divs
+        # First div typically has: "RS So.5′7″" (class and height)
+        # Second div has: "LHometown..." (position and hometown) OR "Head Coach" (for staff)
+        profile_fields = item.find_all(class_='roster-list-item__profile-fields')
+        
+        # Staff detection: if first profile field contains job titles like "Coach", "Director", etc.
+        # skip this item
+        if profile_fields:
+            first_field = _clean(profile_fields[0].get_text())
+            # Common staff titles
+            staff_keywords = ['coach', 'director', 'associate', 'assistant', 'coordinator', 'manager', 'trainer', 'sports', 'student']
+            if any(keyword in first_field.lower() for keyword in staff_keywords):
+                continue
+        
+        position = ""
+        class_raw = ""
+        
+        if profile_fields:
+            # Parse first profile field for class (RS So., Fr., etc.)
+            first_field = _clean(profile_fields[0].get_text())
+            # Remove height if present in this field
+            first_field_no_height = HEIGHT_RE.sub('', first_field).strip()
+            
+            # Class is typically at start: "RS So.", "Fr.", "Jr.", etc.
+            class_match = re.match(r'^([A-Z]+-?\s*[A-Za-z]+\.?)\s*', first_field_no_height)
+            if class_match:
+                class_raw = class_match.group(1).strip()
+            
+            # Parse second profile field for position (first letters/word before hometown)
+            if len(profile_fields) > 1:
+                second_field = _clean(profile_fields[1].get_text())
+                # Position is directly concatenated with hometown (e.g. "LRochester", "MHHoffman")
+                # Valid positions: L, S, OH, RS, MB, MH, DS, OPP (and combinations like OH/DS)
+                # Match known position codes at start of string
+                pos_match = re.match(r'^(L|S|OH|RS|MB|MH|DS|OPP)(?:/(?:L|S|OH|RS|MB|MH|DS|OPP))?', second_field)
+                if pos_match:
+                    position = pos_match.group(0)
+        
+        players.append({
+            "name": name,
+            "position": position,
+            "class_raw": class_raw,
+            "height_raw": height_raw,
+        })
+    
+    if players:
+        logger.info("Parsed %d players from SIDEARM roster-list-item layout.", len(players))
+    
+    return players
+
+
 # ===================== SIDEARM TABLE LAYOUT =====================
 
 
@@ -172,7 +260,7 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
 
         name_idx = find_col(["name", "player"])
         pos_idx = find_col(["pos", "position"])
-        class_idx = find_col(["class", "year", "eligibility"])
+        class_idx = find_col(["class", "year", "eligibility", "cl", "yr"])
         height_idx = find_col(["ht", "height"])
 
         if name_idx is None or pos_idx is None:
@@ -387,8 +475,83 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
 
     We do a very simple JSON sniff looking for arrays of objects with
     name / position / height / class-like fields.
+    
+    Also handles embedded JavaScript arrays with detailed player data
+    (e.g., George Mason format with height_feet, position_short, academic_year_short).
     """
     players: List[Dict[str, str]] = []
+    
+    # First, try to find embedded JavaScript array with detailed player objects
+    # Look for arrays containing objects with fields like "height_feet", "position_short", "academic_year_short"
+    pattern = r'\[\s*\{[^}]{0,500}"height_feet"[^}]{0,500}"position_short"'
+    match = re.search(pattern, html)
+    
+    if match:
+        logger.info("Found embedded JavaScript roster array at position %d", match.start())
+        start_pos = match.start()
+        
+        # Count brackets to find the array end
+        bracket_count = 0
+        i = start_pos
+        while i < len(html) and i < start_pos + 100000:  # Safety limit
+            if html[i] == '[':
+                bracket_count += 1
+            elif html[i] == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    break
+            i += 1
+        
+        if bracket_count == 0:
+            end_pos = i + 1
+            json_str = html[start_pos:end_pos]
+            
+            try:
+                data = json.loads(json_str)
+                if isinstance(data, list):
+                    logger.info("Parsed embedded roster array with %d players", len(data))
+                    
+                    for obj in data:
+                        if not isinstance(obj, dict):
+                            continue
+                        
+                        # Extract name
+                        first_name = obj.get('first_name', '')
+                        last_name = obj.get('last_name', '')
+                        name = _clean(f"{first_name} {last_name}".strip())
+                        
+                        if not name:
+                            continue
+                        
+                        # Extract position
+                        position = _clean(obj.get('position_short', '') or obj.get('position_long', ''))
+                        
+                        # Extract height from height_feet and height_inches
+                        height_feet = obj.get('height_feet')
+                        height_inches = obj.get('height_inches')
+                        height_raw = ""
+                        if height_feet and height_inches is not None:
+                            height_raw = f"{height_feet}-{height_inches}"
+                        
+                        # Extract class/year
+                        class_raw = _clean(
+                            obj.get('academic_year_short', '')
+                            or obj.get('academic_year_long', '')
+                            or obj.get('class', '')
+                        )
+                        
+                        players.append({
+                            "name": name,
+                            "position": position,
+                            "class_raw": class_raw,
+                            "height_raw": height_raw,
+                        })
+                    
+                    if players:
+                        return players
+                        
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.debug("Could not parse embedded roster array as JSON: %s", e)
 
     # 1) application/ld+json blocks
     soup = BeautifulSoup(html, "html.parser")
@@ -705,6 +868,7 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
 
     Strategy, in order:
       1) SIDEARM / NextGen card layout
+      1b) SIDEARM roster-list-item layout (Iowa-style)
       2) SIDEARM-style table layout   (with sanity check to avoid misaligned cases)
       3) Heading-card (WMT) layout
       4) Drupal Views roster tables
@@ -720,6 +884,10 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
 
     # 1) SIDEARM / NextGen cards
     players = parse_sidearm_card_layout(soup)
+
+    # 1b) SIDEARM roster-list-item layout (Iowa, etc.)
+    if not players:
+        players = parse_sidearm_roster_list_items(soup)
 
     # 2) SIDEARM-like tables
     if not players:

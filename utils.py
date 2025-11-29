@@ -247,7 +247,7 @@ def extract_position_codes(position: str) -> Set[str]:
     if "opp" in joined or "opposite" in joined or "right side" in joined or re.search(r"\brs\b", joined):
         codes.add("RS")
 
-    if "middle" in joined or re.search(r"\bmb\b", joined):
+    if "middle" in joined or re.search(r"\bmb\b", joined) or re.search(r"\bmh\b", joined):
         codes.add("MB")
 
     if "outside" in joined or "pin" in joined or re.search(r"\boh\b", joined):
