@@ -229,6 +229,73 @@ def parse_sidearm_roster_list_items(soup: BeautifulSoup) -> List[Dict[str, str]]
     return players
 
 
+# ===================== SIDEARM S-PERSON-DETAILS LAYOUT =====================
+
+
+def parse_sidearm_person_details(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    """
+    Parse SIDEARM s-person-details layout (used by Marshall, Troy, etc.).
+    
+    Structure:
+        <div class="s-person-details">
+            Text like: "Jersey Number | 1 | Player Name | Position | OH | Academic Year | So. | Height | 5' 10''"
+        </div>
+    
+    Returns list of dicts with keys: name, position, class_raw, height_raw.
+    """
+    players: List[Dict[str, str]] = []
+    
+    # Look for s-person-details divs
+    person_divs = soup.find_all('div', class_=lambda x: x and 's-person-details' in x)
+    
+    if not person_divs:
+        return players
+    
+    for div in person_divs:
+        # Get the text content
+        text = normalize_text(div.get_text('|', strip=True))
+        
+        # Split by pipe delimiter
+        parts = [p.strip() for p in text.split('|')]
+        
+        # Parse key-value pairs
+        data = {}
+        i = 0
+        while i < len(parts) - 1:
+            key = parts[i].lower()
+            value = parts[i + 1] if i + 1 < len(parts) else ''
+            
+            # Map keys to our fields
+            if any(k in key for k in ['position', 'pos']):
+                data['position'] = value
+            elif 'academic year' in key or 'year' in key or 'class' in key:
+                data['class_raw'] = value
+            elif 'height' in key or 'ht' in key:
+                data['height_raw'] = value
+            elif 'jersey' not in key.lower() and value and len(value.split()) >= 2:
+                # Likely a name (has multiple words, not a jersey number)
+                if not value.isdigit() and 'hometown' not in key:
+                    data['name'] = value
+            
+            i += 2
+        
+        # Must have a name
+        if 'name' not in data or not data['name']:
+            continue
+        
+        players.append({
+            'name': data.get('name', ''),
+            'position': data.get('position', ''),
+            'class_raw': data.get('class_raw', ''),
+            'height_raw': data.get('height_raw', ''),
+        })
+    
+    if players:
+        logger.info("Parsed %d players from SIDEARM s-person-details layout.", len(players))
+    
+    return players
+
+
 # ===================== SIDEARM TABLE LAYOUT =====================
 
 
@@ -888,6 +955,10 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
     # 1b) SIDEARM roster-list-item layout (Iowa, etc.)
     if not players:
         players = parse_sidearm_roster_list_items(soup)
+
+    # 1c) SIDEARM s-person-details layout (Marshall, Troy, etc.)
+    if not players:
+        players = parse_sidearm_person_details(soup)
 
     # 2) SIDEARM-like tables
     if not players:

@@ -1928,8 +1928,8 @@ TEAMS = [
     {
         "team": "Marshall University",
         "conference": "Sun Belt Conference",
-        "url": "https://gomarshall.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gomarshall.com/sports/womens-volleyball/stats/2025",
+        "url": "https://herdzone.com/sports/womens-volleyball/roster",
+        "stats_url": "https://herdzone.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Old Dominion University",
