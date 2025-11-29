@@ -387,8 +387,23 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
 
     We do a very simple JSON sniff looking for arrays of objects with
     name / position / height / class-like fields.
+    
+    IMPORTANT: Filters out non-volleyball players if >30 players are found
+    (likely multi-sport JSON data).
     """
     players: List[Dict[str, str]] = []
+    
+    # Valid volleyball position codes (case-insensitive)
+    VALID_VB_POSITIONS = {'s', 'setter', 'oh', 'outside', 'outside hitter', 'rs', 'right side', 
+                          'opposite', 'opp', 'mb', 'mh', 'middle', 'middle blocker', 'middle hitter',
+                          'ds', 'defensive specialist', 'l', 'libero', 'def specialist'}
+    
+    def is_volleyball_position(pos: str) -> bool:
+        """Check if position string contains a valid volleyball position code."""
+        if not pos:
+            return False
+        pos_lower = pos.lower().strip()
+        return any(vb_pos in pos_lower for vb_pos in VALID_VB_POSITIONS)
 
     # 1) application/ld+json blocks
     soup = BeautifulSoup(html, "html.parser")
@@ -470,6 +485,26 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
                                 players.append(rec)
 
     if players:
+        # Filter out non-volleyball positions if we have >30 players
+        # (likely grabbed all sports from a multi-sport JSON blob)
+        if len(players) > 30:
+            vb_players = [p for p in players if is_volleyball_position(p.get('position', ''))]
+            if vb_players:
+                logger.info(
+                    "Filtered %d/%d players to volleyball positions only from JSON in %s.",
+                    len(vb_players), len(players), url
+                )
+                return vb_players
+            else:
+                # No valid volleyball positions found - this is likely garbage data
+                # Cap at 25 players as a safety measure
+                logger.warning(
+                    "Found %d players with no volleyball positions in JSON from %s. "
+                    "Capping at 25 players to avoid garbage data.",
+                    len(players), url
+                )
+                return players[:25]
+        
         logger.info(
             "Parsed %d players from embedded JSON roster in %s.", len(players), url
         )

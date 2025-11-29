@@ -1,6 +1,7 @@
 # run_scraper.py
 from __future__ import annotations
 
+import argparse
 import csv
 import logging
 import time
@@ -33,12 +34,56 @@ setup_logging(
 logger = get_logger(__name__)
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Scrape D1 Women's Volleyball rosters with optional team filtering"
+    )
+    parser.add_argument(
+        "--team",
+        action="append",
+        dest="teams",
+        help="Team name to scrape (can be used multiple times). Example: --team 'Brigham Young University'"
+    )
+    parser.add_argument(
+        "--teams-file",
+        type=str,
+        help="File containing team names (one per line) to scrape"
+    )
+    args = parser.parse_args()
+    
+    # Determine which teams to scrape
+    teams_to_scrape = TEAMS
+    
+    if args.teams or args.teams_file:
+        # Collect team names from arguments
+        selected_team_names = set(args.teams or [])
+        
+        # Add teams from file if provided
+        if args.teams_file:
+            if os.path.exists(args.teams_file):
+                with open(args.teams_file, 'r') as f:
+                    for line in f:
+                        team_name = line.strip()
+                        if team_name:
+                            selected_team_names.add(team_name)
+            else:
+                logger.error(f"Teams file not found: {args.teams_file}")
+                return
+        
+        # Filter TEAMS list
+        teams_to_scrape = [t for t in TEAMS if t['team'] in selected_team_names]
+        
+        if not teams_to_scrape:
+            logger.error("No matching teams found. Check team names.")
+            return
+        
+        logger.info(f"Filtering to {len(teams_to_scrape)} team(s): {[t['team'] for t in teams_to_scrape]}")
+    
     all_rows: List[Dict[str, Any]] = []
 
     logger.info("Building RPI lookup...")
     rpi_lookup = build_rpi_lookup()
 
-    for team_info in TEAMS:
+    for team_info in teams_to_scrape:
         rows = analyze_team(team_info, rpi_lookup)
         all_rows.extend(rows)
         time.sleep(REQUEST_DELAY)
