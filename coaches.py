@@ -15,20 +15,36 @@ logger = get_logger(__name__)
 
 def find_coaches_page_url(roster_html: str, roster_url: str) -> str | None:
     """
-    Try to find a dedicated 'Coaching Staff' page from the roster HTML.
+    Try to find a dedicated 'Coaching Staff' or 'Coaches' page from the roster HTML.
     """
     soup = BeautifulSoup(roster_html, "html.parser")
+    
+    # Try "Coaching Staff" link first (but skip if it's just an anchor on same page)
     a = soup.find("a", string=lambda t: t and "Coaching Staff" in t)
     if a and a.get("href"):
-        url = urljoin(roster_url, a["href"])
-        logger.debug("Found Coaching Staff link: %s", url)
-        return url
+        href = a["href"]
+        if not href.startswith("#"):  # Skip in-page anchors
+            url = urljoin(roster_url, href)
+            logger.debug("Found Coaching Staff link: %s", url)
+            return url
 
+    # Try "Go To Coaching Staff"
     a = soup.find("a", string=lambda t: t and "Go To Coaching Staff" in t)
     if a and a.get("href"):
-        url = urljoin(roster_url, a["href"])
-        logger.debug("Found 'Go To Coaching Staff' link: %s", url)
-        return url
+        href = a["href"]
+        if not href.startswith("#"):
+            url = urljoin(roster_url, href)
+            logger.debug("Found 'Go To Coaching Staff' link: %s", url)
+            return url
+    
+    # Try just "Coaches" link
+    a = soup.find("a", string=lambda t: t and t.strip() == "Coaches")
+    if a and a.get("href"):
+        href = a["href"]
+        if not href.startswith("#"):
+            url = urljoin(roster_url, href)
+            logger.debug("Found 'Coaches' link: %s", url)
+            return url
 
     logger.debug("No dedicated coaching staff link found on roster page.")
     return None
