@@ -1,6 +1,7 @@
 # run_scraper.py
 from __future__ import annotations
 
+import argparse
 import csv
 import logging
 import time
@@ -8,7 +9,7 @@ import os
 from typing import Any, Dict, List
 
 from settings import TEAMS
-from utils import excel_unprotect
+from utils import excel_unprotect, normalize_school_key
 from rpi_lookup import build_rpi_lookup
 from team_analysis import analyze_team
 from logging_utils import setup_logging, get_logger
@@ -33,12 +34,26 @@ setup_logging(
 logger = get_logger(__name__)
 
 def main():
+    parser = argparse.ArgumentParser(description="Scrape D1 women's volleyball rosters")
+    parser.add_argument("--team", action="append", help="Filter to specific team name(s). Can be used multiple times.")
+    args = parser.parse_args()
+
     all_rows: List[Dict[str, Any]] = []
 
     logger.info("Building RPI lookup...")
     rpi_lookup = build_rpi_lookup()
 
-    for team_info in TEAMS:
+    # Filter teams if requested
+    teams_to_scrape = TEAMS
+    if args.team:
+        filter_normalized = {normalize_school_key(t) for t in args.team}
+        teams_to_scrape = [
+            t for t in TEAMS
+            if normalize_school_key(t["team"]) in filter_normalized
+        ]
+        logger.info("Filtering to %d team(s): %s", len(teams_to_scrape), [t["team"] for t in teams_to_scrape])
+
+    for team_info in teams_to_scrape:
         rows = analyze_team(team_info, rpi_lookup)
         all_rows.extend(rows)
         time.sleep(REQUEST_DELAY)
