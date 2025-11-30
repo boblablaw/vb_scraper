@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from settings import RPI_TEAM_NAME_ALIASES
-from utils import (
+from .utils import (
     fetch_html,
     normalize_player_name,
     normalize_class,
@@ -15,9 +15,9 @@ from utils import (
     is_graduating,
     class_next_year,
 )
-from roster import parse_roster
-from coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
-from transfers import (
+from .roster import parse_roster
+from .coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
+from .transfers import (
     is_outgoing_transfer,
     is_incoming_transfer,
     get_incoming_setters_for_team,
@@ -25,8 +25,8 @@ from transfers import (
     get_incoming_middles_for_team,
     get_incoming_def_specialists_for_team,
 )
-from labels import format_incoming_player_label, format_returning_player_label
-from stats import build_stats_lookup, attach_stats_to_player
+from .labels import format_incoming_player_label, format_returning_player_label
+from .stats import build_stats_lookup, attach_stats_to_player
 from logging_utils import get_logger
 
 logger = get_logger(__name__)

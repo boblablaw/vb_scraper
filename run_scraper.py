@@ -9,9 +9,9 @@ import os
 from typing import Any, Dict, List
 
 from settings import TEAMS
-from utils import excel_unprotect
-from rpi_lookup import build_rpi_lookup
-from team_analysis import analyze_team
+from scraper.utils import excel_unprotect
+from scraper.rpi_lookup import build_rpi_lookup
+from scraper.team_analysis import analyze_team
 from logging_utils import setup_logging, get_logger
 
 

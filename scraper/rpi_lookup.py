@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup  # not strictly needed, but handy if you extend la
 from io import StringIO
 
 from settings import RPI_TEAM_NAME_ALIASES
-from utils import normalize_text, normalize_school_key
+from .utils import normalize_text, normalize_school_key
 from logging_utils import get_logger
 
 logger = get_logger(__name__)

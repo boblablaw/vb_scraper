@@ -7,7 +7,7 @@ from typing import Dict, List
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from utils import normalize_text, excel_protect_phone
+from .utils import normalize_text, excel_protect_phone
 from logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -134,7 +134,66 @@ def parse_coaches_from_html(html: str) -> list[dict]:
             logger.info("Parsed %d coaches from Sidearm-style blocks.", len(coaches))
             return coaches
 
-    # ---------- 2) Fallback: staff-row style detection ----------
+    # ---------- 2) Table-based coaching staff (e.g., UTSA) ----------
+    # Look for "Coaching Staff" heading followed by a table
+    for heading in soup.find_all(["h2", "h3", "h4", "h5"]):
+        heading_text = normalize_text(heading.get_text()).lower()
+        if "coaching staff" in heading_text or heading_text == "coaches":
+            # Find table after this heading
+            table = heading.find_next("table")
+            if table:
+                logger.debug("Found coaching staff table after heading: %s", heading_text)
+                rows = table.find_all("tr")
+                for row in rows[1:]:  # Skip header row
+                    cells = row.find_all(["td", "th"])
+                    if len(cells) >= 2:
+                        # First cell is usually name, second is title
+                        name_cell = cells[0]
+                        title_cell = cells[1]
+                        
+                        name = normalize_text(name_cell.get_text())
+                        title = normalize_text(title_cell.get_text())
+                        
+                        # Skip if name looks like header text
+                        if name.lower() in {"name", "staff", "title"}:
+                            continue
+                        
+                        # Look for email in remaining cells or row
+                        email = ""
+                        phone = ""
+                        for cell in cells[2:]:
+                            cell_text = normalize_text(cell.get_text())
+                            if "@" in cell_text:
+                                m_email = email_pattern.search(cell_text)
+                                if m_email:
+                                    email = m_email.group(0)
+                            m_phone = phone_pattern.search(cell_text)
+                            if m_phone:
+                                phone = m_phone.group(0)
+                        
+                        # Also check for mailto/tel links in any cell
+                        if not email:
+                            email_tag = row.find("a", href=lambda h: h and h.startswith("mailto:"))
+                            if email_tag:
+                                email = email_tag["href"].replace("mailto:", "").strip()
+                        if not phone:
+                            phone_tag = row.find("a", href=lambda h: h and h.startswith("tel:"))
+                            if phone_tag:
+                                phone = phone_tag["href"].replace("tel:", "").strip()
+                        
+                        if name and title:
+                            coaches.append({
+                                "name": name,
+                                "title": title,
+                                "email": email,
+                                "phone": phone,
+                            })
+                
+                if coaches:
+                    logger.info("Parsed %d coaches from coaching staff table.", len(coaches))
+                    return coaches
+
+    # ---------- 3) Fallback: staff-row style detection ----------
 
     coaches = []
     seen_names: set[str] = set()
@@ -151,9 +210,12 @@ def parse_coaches_from_html(html: str) -> list[dict]:
 
         lower_name = name.lower()
 
+        # Skip common navigation/accessibility links
         if lower_name in {"image", "name", "title", "email", "phone number"}:
             continue
         if lower_name.startswith("full bio"):
+            continue
+        if lower_name.startswith("skip to"):
             continue
         if "jersey number" in lower_name:
             continue

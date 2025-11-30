@@ -8,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from io import StringIO
 
-from utils import canonical_name, normalize_text
+from .utils import canonical_name, normalize_text
 from logging_utils import get_logger
 
 logger = get_logger(__name__)
