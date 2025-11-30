@@ -96,6 +96,7 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         position_norm = "/".join(sorted(codes)) if codes else ""
         p["position_raw"] = position_raw
         p["position_norm"] = position_norm
+        p["position_codes"] = codes
 
         height_raw = p.get("height_raw", "")
         height_norm = normalize_height(height_raw)
@@ -119,6 +120,13 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         p["is_grad_flag"] = is_grad_flag
         p["is_xfer_out"] = is_xfer_out
         p["is_xfer_in"] = is_xfer_in
+
+    # Filter out players with no position codes (likely staff)
+    players = [p for p in players if p.get("position_codes")]
+    
+    if not players:
+        logger.warning("No valid players after filtering staff for team %s", team_name)
+        return []
 
     returning_players = [
         p for p in players

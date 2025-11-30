@@ -327,6 +327,19 @@ def build_team_pivot(df: pd.DataFrame) -> pd.DataFrame:
         # ------- Team-level fields (RPI) -------
         rpi_rank = first_non_empty(g["team_rpi_rank"])
         rpi_record = first_non_empty(g["team_overall_record"])
+        
+        # ------- Determine offense type (5-1 vs 6-2) based on assists -------
+        offense_type = "Unknown"
+        if "assists" in g.columns:
+            # Count setters with significant assists (>= 350)
+            setters_with_assists = g[(g["assists"] >= 350) & (g["is_setter"] == 1)]
+            num_setters_with_assists = len(setters_with_assists)
+            
+            if num_setters_with_assists >= 2:
+                offense_type = "6-2"
+            elif num_setters_with_assists == 1:
+                offense_type = "5-1"
+            # else remains "Unknown"
 
         # Normalized key for this team (for matching transfers config)
         team_key = normalize_school_key(team)
@@ -452,6 +465,7 @@ def build_team_pivot(df: pd.DataFrame) -> pd.DataFrame:
             "conference": conf,
             "team_rpi_rank": rpi_rank,
             "team_overall_record": rpi_record,
+            "offense_type": offense_type,
         }
 
         # Position counts (from main script columns)
@@ -551,6 +565,7 @@ def main():
         "conference",
         "team_rpi_rank",
         "team_overall_record",
+        "offense_type",
 
         # --- SETTERS ---
         "returning_setter_count_2026",

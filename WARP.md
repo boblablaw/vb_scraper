@@ -14,14 +14,22 @@ This is a web scraper for Division 1 Women's Volleyball programs. It collects ro
 # Activate virtual environment
 source venv/bin/activate
 
-# Run the main scraper (generates per-player data)
+# 1. Run the main scraper (generates per-player data)
 python run_scraper.py
 
-# Generate team pivot table (aggregated team-level data)
-python team_pivot.py
+# Optional: Filter to specific teams
+python run_scraper.py --team "Brigham Young University" --team "Stanford University"
 
-# Export transfer data to CSV
-python export_transfers.py
+# 2. (Optional) Merge manual roster data for JavaScript-rendered sites
+python merge_manual_rosters.py
+
+# 3. Generate post-processing exports
+python create_team_pivot_csv.py    # Team-level aggregated data
+python create_display_csv.py        # Simplified display version
+python create_transfers_csv.py      # Transfer data export
+
+# 4. (Optional) Validate data quality
+python validation/validate_data.py
 ```
 
 ### Virtual Environment
@@ -41,30 +49,101 @@ pip install pandas requests beautifulsoup4
 
 All outputs are written to the `exports/` directory:
 
+### Main Exports
 - `d1_rosters_2026_with_stats_and_incoming.csv` / `.tsv` — Per-player data (main output)
 - `d1_team_pivot_2026.csv` / `.tsv` — Aggregated team-level data
+- `d1_display_2026.csv` / `.tsv` — Simplified display version with abbreviated stat names
 - `outgoing_transfers.csv` — Exported transfer data
+
+### Logs & Validation
 - `scraper.log` — Detailed execution log
+- `validation/validation_report_*.md` — Data quality validation reports
+- `validation/problem_teams_*.txt` — List of teams with data issues
 
 ## Architecture
 
 ### Data Flow
 
 ```
-settings/teams.py (team URLs) 
-    → run_scraper.py (orchestrator)
-        → team_analysis.py (per-team processing)
-            ├─ roster.py (parse roster HTML)
-            ├─ stats.py (parse stats tables)
-            ├─ coaches.py (extract coach info)
-            ├─ transfers.py (match transfer data)
-            ├─ incoming_players.py (incoming player list)
-            ├─ rpi_lookup.py (fetch RPI rankings)
-            └─ settings/ (config: teams, transfers, RPI aliases)
-    → exports/d1_rosters_*.csv|tsv
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 1. SCRAPING PHASE                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
 
-team_pivot.py (reads TSV, aggregates by team)
-    → exports/d1_team_pivot_*.csv|tsv
+settings/teams.py (347 D1 teams + URLs)
+    ↓
+run_scraper.py (orchestrator)
+    ├─ rpi_lookup.py (fetch RPI rankings)
+    └─ For each team:
+        team_analysis.py
+            ├─ roster.py (parse HTML → name/position/class/height)
+            │   ├─ SIDEARM card/table layouts
+            │   ├─ Drupal Views roster
+            │   ├─ Embedded JSON roster
+            │   ├─ Generic table fallback
+            │   └─ Data cleaners (strip heights from positions, club names from class)
+            ├─ stats.py (parse stats tables → kills/assists/digs/etc.)
+            ├─ coaches.py (extract coach info)
+            ├─ transfers.py (match vs. settings/transfers_config.py)
+            ├─ incoming_players.py (match vs. settings/incoming_players_data.py)
+            └─ Position/class normalization (utils.py)
+    ↓
+exports/d1_rosters_2026_with_stats_and_incoming.tsv (raw export)
+exports/d1_rosters_2026_with_stats_and_incoming.csv
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 2. MANUAL ROSTER MERGE (optional, for JS-rendered sites)               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+settings/manual_rosters.csv (manually entered data)
+    ↓
+merge_manual_rosters.py
+    ├─ Load scraped TSV
+    ├─ Remove teams with manual data from scraped results
+    ├─ Add manual roster entries (with position flags auto-detected)
+    └─ Write merged data back to TSV
+    ↓
+exports/d1_rosters_2026_with_stats_and_incoming.tsv (updated)
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3. POST-PROCESSING & EXPORTS                                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+create_team_pivot_csv.py (aggregate by team)
+    ├─ Read full roster TSV
+    ├─ Aggregate position counts (returning/incoming/projected 2026)
+    ├─ Calculate average heights by position
+    ├─ List transfers and top performers
+    └─ Group by team
+    ↓
+exports/d1_team_pivot_2026.tsv
+exports/d1_team_pivot_2026.csv
+
+create_display_csv.py (simplified stats view)
+    ├─ Read full roster TSV
+    ├─ Extract essential columns only
+    ├─ Abbreviate stat names (K, A, D, MP, SP, etc.)
+    └─ Unprotect Excel formatting
+    ↓
+exports/d1_display_2026.tsv
+exports/d1_display_2026.csv
+
+create_transfers_csv.py
+    └─ Export settings/transfers_config.py to CSV
+    ↓
+exports/outgoing_transfers.csv
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 4. VALIDATION (optional)                                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+validation/validate_data.py
+    ├─ Read exports/d1_rosters_2026_with_stats_and_incoming.tsv
+    ├─ Check data quality (missing fields, invalid formats, normalization failures)
+    ├─ Detect suspected non-players
+    └─ Identify problem teams
+    ↓
+validation/validation/validation_report_*.md
+validation/validation/problem_teams_*.txt
 ```
 
 ### Core Modules
@@ -101,12 +180,34 @@ team_pivot.py (reads TSV, aggregates by team)
 - `transfers_config.py` — Hardcoded list of outgoing transfers
 - `rpi_team_name_aliases.py` — Maps official team names to RPI names when they differ (e.g., "University at Albany" → "Albany")
 - `incoming_players_data.py` — Raw text data of incoming players (freshmen and transfers) by conference
+- `manual_rosters.csv` — Manually-entered roster data for JavaScript-rendered sites that can't be scraped
 
-**`team_pivot.py`** — Post-processing script. Reads the per-player TSV, aggregates by team, calculates:
+**`merge_manual_rosters.py`** — Manual roster merge script. For teams with JavaScript-rendered rosters:
+- Reads manual roster data from `settings/manual_rosters.csv`
+- Removes scraped data for teams with manual entries
+- Adds manual roster rows with auto-detected position flags
+- Writes merged data back to main export TSV
+
+**`create_team_pivot_csv.py`** — Team-level aggregation script. Reads the per-player TSV, aggregates by team, calculates:
 - Position counts (returning/incoming/projected for 2026)
 - Average heights by position
 - Transfer lists
 - Top performers (kills, assists, digs)
+
+**`create_display_csv.py`** — Simplified export generator. Creates a clean display version:
+- Extracts only essential columns (name, position, class, height, key stats)
+- Abbreviates stat column names (K, A, D, MP, SP, etc.)
+- Removes Excel protection formatting for easier viewing
+
+**`create_transfers_csv.py`** — Transfer data export utility. Exports `OUTGOING_TRANSFERS` from `settings/transfers_config.py` to CSV format
+
+**`validation/validate_data.py`** — Data quality validation script. Analyzes scraped data for:
+- Missing or invalid field values (position, height, class)
+- Failed normalization (values that couldn't be mapped to standard formats)
+- Suspected non-player entries (staff, coaches)
+- Duplicate players
+- Teams with data quality issues
+- Generates validation reports and problem team lists
 
 **`utils.py`** — Shared utilities:
 - Text normalization (`normalize_text`, `normalize_player_name`)
@@ -135,8 +236,13 @@ team_pivot.py (reads TSV, aggregates by team)
 **Roster Parsing Hierarchy**: The roster parser tries multiple strategies in sequence:
 1. SIDEARM card layout
 2. SIDEARM table layout
-3. Presto Sports format
-4. Generic heuristic parsing
+3. Drupal Views roster
+4. Heading-card layout
+5. WMT reference-based JSON
+6. Embedded JSON blobs
+7. Number-name-details pattern
+8. Presto Sports format
+9. Generic heuristic table parsing
 
 **Stats Joining**: Player stats are joined to roster data by canonicalizing names (lowercase, strip punctuation, sort tokens) to handle minor variations.
 
@@ -159,6 +265,7 @@ team_pivot.py (reads TSV, aggregates by team)
 ### Roster HTML Parsing Quirks
 
 - **SIDEARM**: Most common platform. Look for classes like `.sidearm-roster-player`, `.sidearm-roster-card`. Stats tables use `offensiveStats` and `defensiveStats` classes.
+- **WMT Platform**: Uses reference-based JSON data embedded in script tags. The parser (`parse_wmt_reference_json_roster()`) extracts large JSON arrays (50KB+, 1000+ items), finds roster reference keys, and recursively resolves integer references to extract player data (names, positions, heights, class years). This parser successfully handles 13 teams including Auburn, Stanford, Virginia Tech, Arizona State, Cincinnati, UCF, Iowa, Penn State, Purdue, Bradley, SDSU, SJSU, and Old Dominion. **Note**: WMT platform stats pages are JavaScript-rendered without parseable JSON data—stats for these teams cannot be scraped without browser automation.
 - **Presto Sports**: Uses `<rosterspot>` custom tags.
 - **Staff vs. Player Detection**: The parser skips coaching staff blocks by looking for keywords like "coaching staff" or "head coach" in heading text.
 - **Multi-column Stats Tables**: Stats tables sometimes use multi-level column headers. The `column_key()` function in `stats.py` flattens these.
@@ -166,9 +273,9 @@ team_pivot.py (reads TSV, aggregates by team)
 ### Data Cleaning Notes
 
 - **Player Names**: Jersey numbers are stripped; "Last, First" format is flipped to "First Last".
-- **Height**: Supports formats like `6-2`, `6'2`, `6′2″`. Converted to `F-I` format (e.g., `6-2`).
-- **Class Years**: Handles variations like "Fr", "Freshman", "R-Fr", "Redshirt Freshman", "5th", "Gr".
-- **Position Codes**: Raw positions like "S/DS" are split into multiple codes. Special rule: "S/DS" counts as DS, not setter (defensive specialists who can set).
+- **Height**: Supports formats like `6-2`, `6'2`, `6′2″`. Converted to `F-I` format (e.g., `6-2`). Placeholder text like "Jersey Number" is filtered out during parsing.
+- **Class Years**: Handles variations like "Fr", "Freshman", "R-Fr", "Redshirt Freshman", "5th", "6th", "Gr". Also supports "First Year" (FY/Fy/Fy.) which maps to Fr, and redshirt variants (RFr./R-Fy./Rf.) which map to R-Fr. Club volleyball team names (containing "club", "volleyball", "vbc") are filtered out if they appear in the class field.
+- **Position Codes**: Raw positions like "S/DS" are split into multiple codes. Special rule: "S/DS" counts as DS, not setter (defensive specialists who can set). **MH** (Middle Hitter) is recognized as equivalent to **MB** (Middle Blocker). Height patterns embedded in position strings (e.g., "Left Side LS 5'10\"") are automatically stripped.
 
 ### Transfer and Incoming Player Matching
 

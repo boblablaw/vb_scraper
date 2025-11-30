@@ -34,6 +34,9 @@ NON_PLAYER_KEYWORDS = [
 
 class DataValidator:
     def __init__(self, csv_path: str, log_path: str = None):
+        # If relative path, resolve from parent directory (project root)
+        if not os.path.isabs(csv_path) and not os.path.exists(csv_path):
+            csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), csv_path)
         self.csv_path = csv_path
         self.log_path = log_path
         self.df = None
@@ -464,7 +467,7 @@ class DataValidator:
         """Generate comprehensive validation report."""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         report_path = f"validation/validation_report_{timestamp}.md"
-        
+        os.makedirs(os.path.dirname(report_path), exist_ok=True)
         with open(report_path, 'w') as f:
             f.write("# Data Validation Report\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")

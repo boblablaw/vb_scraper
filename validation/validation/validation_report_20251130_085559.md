@@ -1,26 +1,183 @@
 # Data Validation Report
 
-Generated: 2025-11-30 00:52:30
+Generated: 2025-11-30 08:55:59
 
 ## Summary Statistics
 
-- Total rows: 4735
-- Total teams: 284
+- Total rows: 4685
+- Total teams: 278
 - Expected teams: 347
-- Missing teams: 63
+- Missing teams: 69
 
 ## Data Quality Issues
 
-- Missing positions: 411
+- Missing positions: 397
 - Invalid positions: 0
-- Missing heights: 387
-- Invalid heights: 2119
-- Missing classes: 449
+- Failed position normalization: 59
+- Missing heights: 361
+- Invalid heights: 2101
+- Failed height normalization: 10
+- Missing classes: 427
 - Invalid classes: 0
-- Failed class normalization: 57
+- Failed class normalization: 54
 - Suspected non-players: 3
-- Duplicate players: 1
-- Teams with issues: 29
+- Duplicate players: 0
+- Teams with issues: 24
+
+## Failed Position Normalization
+
+Players with raw position data that failed to normalize:
+
+### Raw value: `101` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `130` (3 occurrences)
+
+- Virginia Tech: nan
+- Virginia Tech: nan
+- Old Dominion University: nan
+
+### Raw value: `150` (1 occurrences)
+
+- Old Dominion University: nan
+
+### Raw value: `153` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `169` (1 occurrences)
+
+- Old Dominion University: nan
+
+### Raw value: `192` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `193` (2 occurrences)
+
+- Auburn University: nan
+- Auburn University: nan
+
+### Raw value: `212` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `233` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `239` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `259` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `269` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `280` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `292` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `301` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `311` (1 occurrences)
+
+- Auburn University: nan
+
+### Raw value: `323` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `89` (1 occurrences)
+
+- Virginia Tech: nan
+
+### Raw value: `98` (1 occurrences)
+
+- Old Dominion University: nan
+
+### Raw value: `A` (1 occurrences)
+
+- Duke University: Olivia Wayne
+
+### Raw value: `Creative Video • First Season` (1 occurrences)
+
+- Clemson University: Sydney Johnson
+
+### Raw value: `LB 5'6"` (1 occurrences)
+
+- University of the Incarnate Word: Ashton Rogers
+
+### Raw value: `Left Side LS 5'10"` (1 occurrences)
+
+- Illinois State University: Caitlyn Little
+
+### Raw value: `Left Side LS 5'8"` (1 occurrences)
+
+- Illinois State University: Oliwia Caputa
+
+### Raw value: `Left Side LS 5'9"` (1 occurrences)
+
+- Illinois State University: Lauren Salata
+
+### Raw value: `Left Side LS 6'1"` (1 occurrences)
+
+- Illinois State University: Aida Shadewald
+
+### Raw value: `Left Side LS 6'2"` (1 occurrences)
+
+- Illinois State University: Abby Reck
+
+### Raw value: `M` (3 occurrences)
+
+- University of North Carolina Asheville: Alison Goldberg
+- University of North Carolina Asheville: Kimberly Williams
+- University of North Carolina Asheville: Alise Evans
+
+### Raw value: `M 5'11"` (1 occurrences)
+
+- Alcorn State University: Bailey Upshaw
+
+### Raw value: `MH` (6 occurrences)
+
+- Western Kentucky University: Gabby Weihe
+- Western Kentucky University: Izzy Van De Wiele
+- Ball State University: Tiffany Snook
+- Ball State University: Gwen Crull
+- Ball State University: Alana Bailey
+- ... and 1 more
+
+## Failed Height Normalization
+
+Players with raw height data that failed to normalize:
+
+### Raw value: `0' 0''` (1 occurrences)
+
+- Western Kentucky University: Camila Adams
+
+### Raw value: `Jersey Number` (8 occurrences)
+
+- Tulane University: Avery Burks
+- Syracuse University: Marisse Turner
+- DePaul University: Grace Brooker
+- University of Northern Colorado: nan
+- Liberty University: Laney Daniell
+- ... and 3 more
+
+### Raw value: `Photo by: Kevin Crompton` (1 occurrences)
+
+- University of Connecticut: Isabella Suhy
 
 ## Failed Class Normalization
 
@@ -55,14 +212,14 @@ Players with raw class data that failed to normalize:
 - Harvard University: Bridget Egan
 - Harvard University: Sofia Rossi
 
-### Raw value: `Fy.` (26 occurrences)
+### Raw value: `Fy.` (23 occurrences)
 
-- Northwestern University: Kayla Kauffman
-- Northwestern University: Lauren Dignan
-- Northwestern University: Bella Bullington
 - Dartmouth College: Riley Imamura
 - Dartmouth College: Zori Brown
-- ... and 21 more
+- Dartmouth College: Elle McCreery
+- Dartmouth College: Annika Roberson
+- Dartmouth College: Julia York
+- ... and 18 more
 
 ### Raw value: `Legacy Volleyball Club` (1 occurrences)
 
@@ -82,23 +239,19 @@ Players with raw class data that failed to normalize:
 
 - Boston College: Anna Herrington
 
-### Raw value: `R-Fy.` (1 occurrences)
-
-- Northwestern University: Ava Pratt
-
 ### Raw value: `RFr.` (2 occurrences)
 
 - Northeastern University: Valentina Meirelles
 - North Dakota State University: Sadie Johnson
 
-### Raw value: `Rf.` (7 occurrences)
+### Raw value: `Rf.` (8 occurrences)
 
+- Montana State University: Makenzie Jackson
 - Jacksonville State University: Izzy Whittaker
 - Jacksonville State University: D'Yanna Spicer
 - Lindenwood University: Meghan Donoughue
 - Lindenwood University: Tori Staples
-- Southeastern Louisiana University: Audrey Vielguth
-- ... and 2 more
+- ... and 3 more
 
 ### Raw value: `Skyline` (1 occurrences)
 
@@ -128,10 +281,6 @@ Players with raw class data that failed to normalize:
   - Position raw: Outside Hitter OH 5'11"
   - Class raw: R-Sr.
 
-## Duplicate Players
-
-- **Le Moyne College**: Le Moyne College (2x)
-
 ## Teams with Data Quality Issues
 
 ### University of North Carolina at Charlotte (2 players)
@@ -141,72 +290,37 @@ Players with raw class data that failed to normalize:
 - Missing 100% heights
 - Missing 100% classes
 
-### University of North Texas (2 players)
+### West Virginia University (2 players)
 
 - Small roster: 2 players
 - Missing 100% positions
 - Missing 100% heights
 - Missing 100% classes
 
-### Rice University (3 players)
-
-- Small roster: 3 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### University of Tulsa (5 players)
-
-- Small roster: 5 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### Seton Hall University (3 players)
-
-- Small roster: 3 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### Xavier University (3 players)
-
-- Small roster: 3 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### Montana State University (3 players)
-
-- Small roster: 3 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### University of Toledo (6 players)
-
-- Small roster: 6 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### Le Moyne College (3 players)
-
-- Small roster: 3 players
-- Missing 100% positions
-- Missing 100% heights
-- Missing 100% classes
-
-### Coastal Carolina University (2 players)
+### Northwestern University (2 players)
 
 - Small roster: 2 players
 - Missing 100% positions
 - Missing 100% heights
 - Missing 100% classes
 
-### The University of Southern Mississippi (1 players)
+### The Ohio State University (2 players)
 
-- Small roster: 1 players
+- Small roster: 2 players
+- Missing 100% positions
+- Missing 100% heights
+- Missing 100% classes
+
+### Murray State University (2 players)
+
+- Small roster: 2 players
+- Missing 100% positions
+- Missing 100% heights
+- Missing 100% classes
+
+### Mississippi State University (3 players)
+
+- Small roster: 3 players
 - Missing 100% positions
 - Missing 100% heights
 - Missing 100% classes
@@ -241,9 +355,9 @@ Players with raw class data that failed to normalize:
 - Missing 100% heights
 - Missing 100% classes
 
-### University of Northern Colorado (4 players)
+### University of Northern Colorado (5 players)
 
-- Small roster: 4 players
+- Small roster: 5 players
 - Missing 100% positions
 - Missing 100% classes
 
@@ -315,6 +429,7 @@ Players with raw class data that failed to normalize:
 ## Missing Teams
 
 - Central Connecticut State University
+- Coastal Carolina University
 - East Texas A&M University
 - Furman University
 - Gonzaga University
@@ -322,46 +437,45 @@ Players with raw class data that failed to normalize:
 - James Madison University
 - Lafayette College
 - Lamar University
+- Le Moyne College
 - Long Island University (LIU)
 - Louisiana State University
 - Marshall University
 - Mercer University
 - Mercyhurst University[c]
-- Mississippi State University
+- Middle Tennessee State University
 - Mississippi Valley State University
 - Oregon State University
-- Princeton University
-- Providence College
 - Quinnipiac University
+- Saint Mary's College of California
 - Santa Clara University
 - Seattle University
-- South Dakota State University
+- Seton Hall University
+- St. John's University
+- Stephen F. Austin State University
+- Temple University
 - Tennessee Technological University
 - Texas Southern University
+- Texas Tech University
 - The Citadel
+- The University of Southern Mississippi
 - Troy University
 - University of Alabama
+- University of Alabama at Birmingham
 - University of Arkansas
-- University of California, Los Angeles
 - University of Denver
 - University of Florida
 - University of Georgia
 - University of Idaho
 - University of Kentucky
-- University of Louisiana at Lafayette
 - University of Missouri
 - University of Missouri-Kansas City
-- University of New Hampshire
+- University of Montana
 - University of New Haven
 - University of New Mexico
 - University of New Orleans
+- University of North Carolina
 - University of North Dakota
-- University of Northern Iowa
 - University of Oklahoma
-- University of Pittsburgh
-- University of Portland
-- University of San Diego
-- University of San Francisco
-- University of South Carolina
-- University of South Dakota
+- University of Oregon
 

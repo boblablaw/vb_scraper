@@ -1,0 +1,5 @@
+# Ignore all files in this directory except .gitignore and sample files
+*
+!.gitignore
+!sample_*.txt
+!README.md

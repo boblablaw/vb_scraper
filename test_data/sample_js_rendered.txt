@@ -1,0 +1,109 @@
+# JavaScript-Rendered Roster Sites
+# Teams that failed to scrape (69 total)
+# Generated: 2025-11-30
+# Updated: 2025-11-30 (removed 13 teams now handled by WMT parser)
+#
+# These teams use JavaScript to render their rosters, which prevents
+# the scraper from extracting data. Manual data entry is required.
+# See settings/MANUAL_ROSTERS_README.md for instructions.
+#
+# Note: 13 teams previously on this list (Auburn, Stanford, Virginia Tech,
+# Arizona State, Cincinnati, UCF, Iowa, Penn State, Purdue, Bradley, SDSU,
+# SJSU, Old Dominion) are now successfully scraped using the WMT
+# reference-based JSON parser.
+
+Central Connecticut State University
+Coastal Carolina University
+East Texas A&M University
+Furman University
+Gonzaga University
+Jackson State University
+James Madison University
+Lafayette College
+Lamar University
+Le Moyne College
+Long Island University (LIU)
+Louisiana State University
+Marshall University
+Mercer University
+Mercyhurst University[c]
+Middle Tennessee State University
+Mississippi Valley State University
+Oregon State University
+Quinnipiac University
+Saint Mary's College of California
+Santa Clara University
+Seattle University
+Seton Hall University
+St. John's University
+Stephen F. Austin State University
+Temple University
+Tennessee Technological University
+Texas Southern University
+Texas Tech University
+The Citadel
+The University of Southern Mississippi
+Troy University
+University of Alabama
+University of Alabama at Birmingham
+University of Arkansas
+University of Denver
+University of Florida
+University of Georgia
+University of Idaho
+University of Kentucky
+University of Missouri
+University of Missouri-Kansas City
+University of Montana
+University of New Haven
+University of New Mexico
+University of New Orleans
+University of North Carolina
+University of North Dakota
+University of Oklahoma
+University of Oregon
+University of Portland
+University of San Diego
+University of San Francisco
+University of South Carolina
+University of South Dakota
+University of Southern California
+University of St. Thomas
+University of Tennessee
+University of Texas
+University of Texas Rio Grande Valley
+University of Texas at Arlington
+University of Toledo
+University of Wyoming
+University of the Pacific
+Utah State University
+Utah Tech University
+Vanderbilt University
+Washington State University
+Xavier University
+
+# ============================================================
+# CONFERENCE BREAKDOWN (69 teams)
+# ============================================================
+#
+# Southeastern Conference (12 teams) - Most affected
+# West Coast Conference (10 teams)
+# NEC (5 teams)
+# Southland Conference (5 teams)
+# Sun Belt Conference (5 teams)
+# The Summit League (5 teams)
+# Big East Conference (3 teams)
+# Mountain West Conference (3 teams)
+# Southern Conference (3 teams)
+# Southwestern Athletic Conference (3 teams)
+# American Conference (2 teams)
+# Big Sky Conference (2 teams)
+# Big Ten Conference (2 teams)
+# Western Athletic Conference (2 teams)
+# Atlantic Coast Conference (1 team)
+# Big 12 Conference (1 team)
+# Conference USA (1 team)
+# Metro Atlantic Athletic Conference (1 team)
+# Mid-American Conference (1 team)
+# Ohio Valley Conference (1 team)
+# Patriot League (1 team)

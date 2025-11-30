@@ -936,7 +936,7 @@ TEAMS = [
         "stats_url": "https://csuvikings.com/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "University of Wisconsinï¿½ Green Bay",
+        "team": "University of Wisconsin-Green Bay",
         "conference": "Horizon League",
         "url": "https://greenbayphoenix.com/sports/womens-volleyball/roster",
         "stats_url": "https://greenbayphoenix.com/sports/womens-volleyball/stats/2025",
@@ -948,7 +948,7 @@ TEAMS = [
         "stats_url": "https://athletics.uindy.edu/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "University of WisconsinâMilwaukee",
+        "team": "University of Wisconsin-Milwaukee",
         "conference": "Horizon League",
         "url": "https://mkepanthers.com/sports/womens-volleyball/roster",
         "stats_url": "https://mkepanthers.com/sports/womens-volleyball/stats/2025",
@@ -1782,7 +1782,7 @@ TEAMS = [
         "stats_url": "https://alcornsports.com/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "BethuneâCookman University",
+        "team": "Bethune-Cookman University",
         "conference": "Southwestern Athletic Conference",
         "url": "https://bcuathletics.com/sports/womens-volleyball/roster",
         "stats_url": "https://bcuathletics.com/sports/womens-volleyball/stats/2025",

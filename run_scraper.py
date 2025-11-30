@@ -48,7 +48,17 @@ def main():
         type=str,
         help="File containing team names (one per line) to scrape"
     )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output file base name (without extension). Default: d1_rosters_2026_with_stats_and_incoming"
+    )
     args = parser.parse_args()
+    
+    # Determine output file paths
+    output_base = args.output if args.output else "d1_rosters_2026_with_stats_and_incoming"
+    output_csv = os.path.join(EXPORT_DIR, f"{output_base}.csv")
+    output_tsv = os.path.join(EXPORT_DIR, f"{output_base}.tsv")
     
     # Determine which teams to scrape
     teams_to_scrape = TEAMS
@@ -226,7 +236,7 @@ def main():
     friendly_fieldnames = [internal_to_friendly[c] for c in fieldnames_internal]
 
     # ---- WRITE CSV (RAW VALUES, friendly headers) ----
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=friendly_fieldnames)
         writer.writeheader()
 
@@ -249,7 +259,7 @@ def main():
             writer.writerow(out_row)
 
     # ---- WRITE TSV (SAFE VALUES, friendly headers) ----
-    with open(OUTPUT_TSV, "w", newline="", encoding="utf-8") as f:
+    with open(output_tsv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=friendly_fieldnames, delimiter="\t")
         writer.writeheader()
 
@@ -260,8 +270,8 @@ def main():
             }
             writer.writerow(out_row)
 
-    logger.info("Wrote %d player rows to: %s", len(all_rows), OUTPUT_CSV)
-    logger.info("Also wrote TSV to: %s", OUTPUT_TSV)
+    logger.info("Wrote %d player rows to: %s", len(all_rows), output_csv)
+    logger.info("Also wrote TSV to: %s", output_tsv)
     logger.debug("Columns written: %s", friendly_fieldnames)
 
 
