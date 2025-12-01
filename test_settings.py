@@ -10,6 +10,9 @@ import unittest
 import sys
 from pathlib import Path
 
+script_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(script_dir))
+
 
 class TestSettingsPackageImports(unittest.TestCase):
     """Test that configuration data is correctly accessible from settings package."""
@@ -137,10 +140,10 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(TEAMS), 0)
 
     def test_team_analysis_imports_rpi_aliases(self):
-        """Test that team_analysis.py correctly imports RPI_TEAM_NAME_ALIASES from settings."""
+        """Test that scraper/team_analysis.py correctly imports RPI_TEAM_NAME_ALIASES from settings."""
         # Import the module (may fail if dependencies are missing)
         try:
-            import team_analysis
+            from scraper import team_analysis
         except ImportError as e:
             # Skip test if dependencies are missing
             if any(dep in str(e) for dep in ["pandas", "bs4", "requests"]):
@@ -155,10 +158,10 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(RPI_TEAM_NAME_ALIASES), 0)
 
     def test_rpi_lookup_imports_aliases(self):
-        """Test that rpi_lookup.py correctly imports RPI_TEAM_NAME_ALIASES from settings."""
+        """Test that scraper/rpi_lookup.py correctly imports RPI_TEAM_NAME_ALIASES from settings."""
         # Import the module (may fail if dependencies are missing)
         try:
-            import rpi_lookup
+            from scraper import rpi_lookup
         except ImportError as e:
             # Skip test if dependencies are missing
             if any(dep in str(e) for dep in ["pandas", "requests"]):
@@ -173,9 +176,9 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(RPI_TEAM_NAME_ALIASES), 0)
 
     def test_transfers_imports_outgoing_transfers(self):
-        """Test that transfers.py correctly imports OUTGOING_TRANSFERS from settings."""
+        """Test that scraper/transfers.py correctly imports OUTGOING_TRANSFERS from settings."""
         # Import the module
-        import transfers
+        from scraper import transfers
         
         # Verify the module can access OUTGOING_TRANSFERS
         from settings import OUTGOING_TRANSFERS
@@ -185,10 +188,10 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(OUTGOING_TRANSFERS), 0)
 
     def test_team_pivot_imports_outgoing_transfers(self):
-        """Test that team_pivot.py correctly imports OUTGOING_TRANSFERS from settings."""
+        """Test that create_team_pivot_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
         # Import the module (this will work even if pandas is missing, as imports are at top)
         try:
-            import team_pivot
+            import create_team_pivot_csv
         except ImportError as e:
             # If pandas or other dependencies are missing, that's okay for this test
             if "pandas" not in str(e):
@@ -202,9 +205,9 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(OUTGOING_TRANSFERS), 0)
 
     def test_export_transfers_imports_outgoing_transfers(self):
-        """Test that export_transfers.py correctly imports OUTGOING_TRANSFERS from settings."""
+        """Test that create_transfers_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
         # Import the module
-        import export_transfers
+        import create_transfers_csv
         
         # Verify the module can access OUTGOING_TRANSFERS
         from settings import OUTGOING_TRANSFERS
@@ -214,9 +217,9 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(OUTGOING_TRANSFERS), 0)
 
     def test_incoming_players_module_accessible(self):
-        """Test that incoming_players.py can access RAW_INCOMING_TEXT from settings."""
+        """Test that scraper/incoming_players.py can access RAW_INCOMING_TEXT from settings."""
         # Import the module
-        import incoming_players
+        from scraper import incoming_players
         
         # Verify the module can access RAW_INCOMING_TEXT
         from settings import RAW_INCOMING_TEXT
