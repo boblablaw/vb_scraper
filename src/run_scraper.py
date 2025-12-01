@@ -141,6 +141,13 @@ def main():
                         row["reception_pct"] = round((total - errors) / total, 3)
                 except:
                     pass
+    
+    # Filter out rows with no name (incomplete roster data)
+    all_rows = [row for row in all_rows if row.get("name") and str(row.get("name")).strip()]
+    
+    if not all_rows:
+        logger.warning("No valid player rows after filtering, nothing to write.")
+        return
 
     # Simplified column set - only roster + stats data
     base_fields = [
