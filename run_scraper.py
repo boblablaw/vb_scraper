@@ -9,7 +9,6 @@ import os
 from typing import Any, Dict, List
 
 from settings import TEAMS
-from scraper.utils import excel_unprotect
 from scraper.rpi_lookup import build_rpi_lookup
 from scraper.team_analysis import analyze_team
 from logging_utils import setup_logging, get_logger
@@ -21,7 +20,6 @@ EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.csv")
-OUTPUT_TSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.tsv")
 
 LOG_FILE = os.path.join(EXPORT_DIR, "scraper.log")
 
@@ -55,10 +53,9 @@ def main():
     )
     args = parser.parse_args()
     
-    # Determine output file paths
+    # Determine output file path
     output_base = args.output if args.output else "d1_rosters_2026_with_stats_and_incoming"
     output_csv = os.path.join(EXPORT_DIR, f"{output_base}.csv")
-    output_tsv = os.path.join(EXPORT_DIR, f"{output_base}.tsv")
     
     # Determine which teams to scrape
     teams_to_scrape = TEAMS
@@ -242,32 +239,9 @@ def main():
 
     friendly_fieldnames = [internal_to_friendly[c] for c in fieldnames_internal]
 
-    # ---- WRITE CSV (RAW VALUES, friendly headers) ----
+    # ---- WRITE CSV (friendly headers, no Excel protections) ----
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=friendly_fieldnames)
-        writer.writeheader()
-
-        for r in all_rows:
-            raw_row = r.copy()
-
-            raw_row["team_overall_record"] = excel_unprotect(
-                raw_row.get("team_overall_record", "")
-            )
-            raw_row["height"] = excel_unprotect(raw_row.get("height", ""))
-
-            for k in list(raw_row.keys()):
-                if k.endswith("_phone"):
-                    raw_row[k] = excel_unprotect(raw_row.get(k, ""))
-
-            out_row = {
-                internal_to_friendly[k]: raw_row.get(k, "")
-                for k in fieldnames_internal
-            }
-            writer.writerow(out_row)
-
-    # ---- WRITE TSV (SAFE VALUES, friendly headers) ----
-    with open(output_tsv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=friendly_fieldnames, delimiter="\t")
         writer.writeheader()
 
         for r in all_rows:
@@ -278,7 +252,6 @@ def main():
             writer.writerow(out_row)
 
     logger.info("Wrote %d player rows to: %s", len(all_rows), output_csv)
-    logger.info("Also wrote TSV to: %s", output_tsv)
     logger.debug("Columns written: %s", friendly_fieldnames)
 
 

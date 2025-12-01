@@ -56,7 +56,7 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
     
     # Load scraped data
     try:
-        scraped_df = pd.read_csv(scraped_file, sep='\t')
+        scraped_df = pd.read_csv(scraped_file)
     except Exception as e:
         print(f'Error loading scraped data from {scraped_file}: {e}')
         return
@@ -324,16 +324,11 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
     # Sort by team
     merged_df = merged_df.sort_values('Team')
     
-    # Write merged data (TSV)
-    merged_df.to_csv(output_file, sep='\t', index=False)
-    
-    # Also write CSV version
-    csv_file = output_file.replace('.tsv', '.csv')
-    merged_df.to_csv(csv_file, index=False)
+    # Write merged data (CSV only)
+    merged_df.to_csv(output_file, index=False)
     
     print()
     print(f'Merged data written to: {output_file}')
-    print(f'Also written to: {csv_file}')
     print(f'  Total players: {len(merged_df)}')
     print(f'  Total teams: {merged_df["Team"].nunique()}')
     print()
@@ -364,8 +359,8 @@ def main():
     print()
     
     # Parse command line arguments for custom paths
-    scraped_file = 'exports/d1_rosters_2026_with_stats_and_incoming.tsv'
-    output_file = 'exports/d1_rosters_2026_with_stats_and_incoming.tsv'
+    scraped_file = 'exports/d1_rosters_2026_with_stats_and_incoming.csv'
+    output_file = 'exports/d1_rosters_2026_with_stats_and_incoming.csv'
     
     if '--output' in sys.argv:
         idx = sys.argv.index('--output')

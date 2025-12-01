@@ -64,17 +64,16 @@ COLUMN_MAPPING = [
 OPTIONAL_COLUMNS = ["Rec%", "Block Errors"]
 
 
-def create_display_csv(input_file: str, output_csv: str, output_tsv: str = None):
+def create_display_csv(input_file: str, output_csv: str):
     """
     Create simplified display CSV from full roster export.
     
     Args:
-        input_file: Path to input TSV file (full export)
+        input_file: Path to input CSV file (full export)
         output_csv: Path to output CSV file
-        output_tsv: Optional path to output TSV file
     """
     print(f"Reading data from: {input_file}")
-    df = pd.read_csv(input_file, sep="\t")
+    df = pd.read_csv(input_file)
     
     print(f"Input: {len(df)} rows, {len(df.columns)} columns")
     
@@ -108,14 +107,9 @@ def create_display_csv(input_file: str, output_csv: str, output_tsv: str = None)
     
     print(f"Output: {len(display_df)} rows, {len(display_df.columns)} columns")
     
-    # Write CSV
+    # Write CSV only
     display_df.to_csv(output_csv, index=False)
     print(f"Wrote CSV to: {output_csv}")
-    
-    # Write TSV if requested
-    if output_tsv:
-        display_df.to_csv(output_tsv, sep="\t", index=False)
-        print(f"Wrote TSV to: {output_tsv}")
     
     # Print column summary
     print("\nColumns in output:")
@@ -126,8 +120,7 @@ def create_display_csv(input_file: str, output_csv: str, output_tsv: str = None)
 
 
 if __name__ == "__main__":
-    input_file = "exports/d1_rosters_2026_with_stats_and_incoming.tsv"
+    input_file = "exports/d1_rosters_2026_with_stats_and_incoming.csv"
     output_csv = "exports/d1_display_2026.csv"
-    output_tsv = "exports/d1_display_2026.tsv"
     
-    create_display_csv(input_file, output_csv, output_tsv)
+    create_display_csv(input_file, output_csv)

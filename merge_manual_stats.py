@@ -23,7 +23,7 @@ from pathlib import Path
 from scraper.utils import normalize_player_name, normalize_school_key
 
 STATS_DIR = "stats"
-MAIN_EXPORT = "exports/d1_rosters_2026_with_stats_and_incoming.tsv"
+MAIN_EXPORT = "exports/d1_rosters_2026_with_stats_and_incoming.csv"
 
 # Map file name prefixes to official team names
 TEAM_NAME_MAP = {
@@ -265,22 +265,17 @@ def main():
         return
     
     print(f"Loading main export: {MAIN_EXPORT}")
-    main_df = pd.read_csv(MAIN_EXPORT, sep='\t')
+    main_df = pd.read_csv(MAIN_EXPORT)
     print(f"  {len(main_df)} rows, {main_df['Team'].nunique()} teams")
     
     # Process each team
     for team_name, files in team_files.items():
         main_df = merge_stats_for_team(team_name, files, main_df)
     
-    # Write updated export
+    # Write updated export (CSV only)
     print()
     print(f"Writing updated export to {MAIN_EXPORT}")
-    main_df.to_csv(MAIN_EXPORT, sep='\t', index=False)
-    
-    # Also write CSV version
-    csv_file = MAIN_EXPORT.replace('.tsv', '.csv')
-    main_df.to_csv(csv_file, index=False)
-    print(f"Also wrote: {csv_file}")
+    main_df.to_csv(MAIN_EXPORT, index=False)
     print()
     print("Done!")
 

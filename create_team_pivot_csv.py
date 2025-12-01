@@ -13,9 +13,8 @@ import pandas as pd
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-INPUT_TSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.tsv")
+INPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.csv")
 
-OUTPUT_TSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2026.tsv")
 OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2026.csv")
 
 from settings import OUTGOING_TRANSFERS
@@ -550,8 +549,8 @@ def build_team_pivot(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    # Read the main file *as strings* and, for TSV, with delimiter="\t"
-    df = pd.read_csv(INPUT_TSV, sep="\t", dtype=str, keep_default_na=False)
+    # Read the main file *as strings*
+    df = pd.read_csv(INPUT_CSV, dtype=str, keep_default_na=False)
 
     # Map friendly column headers (from main scraper) back to internal names
     df = map_friendly_headers_to_internal(df)
@@ -661,17 +660,13 @@ def main():
         """
         return beautify(col)
 
-    pivot_df = pivot_df.rename(columns={c: beautify_out(c) for c in pivot_df.columns})
     raw_df = raw_df.rename(columns={c: beautify_out(c) for c in raw_df.columns})
 
-    # ---- WRITE TSV (SAFE VALUES) ----
-    pivot_df.to_csv(OUTPUT_TSV, sep="\t", index=False, quoting=csv.QUOTE_MINIMAL)
-
-    # ---- WRITE CSV (RAW VALUES) ----
+    # ---- WRITE CSV (no Excel protections) ----
     raw_df.to_csv(OUTPUT_CSV, index=False, quoting=csv.QUOTE_MINIMAL)
 
-    print(f"Wrote team pivot to {OUTPUT_TSV} and {OUTPUT_CSV}")
-    print("Columns:", list(pivot_df.columns))
+    print(f"Wrote team pivot to {OUTPUT_CSV}")
+    print("Columns:", list(raw_df.columns))
 
 
 if __name__ == "__main__":
