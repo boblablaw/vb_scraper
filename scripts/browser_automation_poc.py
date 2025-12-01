@@ -96,14 +96,17 @@ def scrape_lsu_roster(driver, year=2025):
     
     # Wait for roster content to load
     try:
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 15)
         
         # Wait for the players-table to be present
         wait.until(EC.presence_of_element_located((By.ID, "players-table")))
         print("Found roster table: #players-table")
         
+        # Wait for table rows to be populated (DataTables might load asynchronously)
+        wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "#players-table tbody tr")) > 0)
+        
         # Additional wait for JavaScript to finish rendering
-        time.sleep(2)
+        time.sleep(3)
         
         players = []
         
@@ -119,21 +122,30 @@ def scrape_lsu_roster(driver, year=2025):
         for row in rows:
             try:
                 cells = row.find_elements(By.TAG_NAME, "td")
-                if not cells:
+                if not cells or len(cells) < 5:
                     continue
                 
                 player = {}
                 
-                # Try to extract data from cells
-                # Typical table structure: [#, Name, Position, Height, Class, Hometown]
-                if len(cells) >= 3:
-                    # Skip first cell (jersey number)
-                    player["name"] = cells[1].text.strip() if len(cells) > 1 else ""
-                    player["position"] = cells[2].text.strip() if len(cells) > 2 else ""
-                    player["height"] = cells[3].text.strip() if len(cells) > 3 else ""
-                    player["class"] = cells[4].text.strip() if len(cells) > 4 else ""
+                # Table structure: [Number, Name, Position, Height, Class, Experience, Hometown, HS, Previous]
+                # Cell 0: Jersey number
+                # Cell 1: Name (may be nested in a div/link)
+                # Cell 2: Position
+                # Cell 3: Height
+                # Cell 4: Class
                 
-                if player.get("name"):
+                # Extract name - might be nested
+                name_text = cells[1].text.strip()
+                # Remove pronunciation icon text if present
+                if "Hear how to pronounce" in name_text:
+                    name_text = name_text.split("Hear how to pronounce")[0].strip()
+                player["name"] = name_text
+                
+                player["position"] = cells[2].text.strip()
+                player["height"] = cells[3].text.strip()
+                player["class"] = cells[4].text.strip()
+                
+                if player["name"]:
                     players.append(player)
                     
             except Exception as e:
