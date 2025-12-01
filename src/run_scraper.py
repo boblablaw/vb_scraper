@@ -19,7 +19,7 @@ REQUEST_DELAY = 1.0
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2025_with_stats_and_incoming.csv")
+OUTPUT_CSV = os.path.join(EXPORT_DIR, "rosters_and_stats.csv")
 
 LOG_FILE = os.path.join(EXPORT_DIR, "scraper.log")
 

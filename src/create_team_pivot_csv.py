@@ -29,8 +29,8 @@ logger = get_logger(__name__)
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-INPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2025_with_stats_and_incoming.csv")
-OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2025.csv")
+INPUT_CSV = os.path.join(EXPORT_DIR, "rosters_and_stats.csv")
+OUTPUT_CSV = os.path.join(EXPORT_DIR, "team_pivot.csv")
 
 
 def parse_incoming_players() -> List[Dict[str, str]]:
