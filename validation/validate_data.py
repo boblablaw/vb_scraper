@@ -121,14 +121,33 @@ class DataValidator:
         else:
             print("✓ All raw positions successfully normalized")
             
-        # Position distribution
+        # Position distribution with mapping from Position Raw
+        from scraper.utils import extract_position_codes
+        
+        position_raw_mapping = defaultdict(int)
+        for idx, row in self.df.iterrows():
+            pos_raw = str(row.get('Position Raw', '')).strip()
+            if pos_raw and pos_raw != 'nan' and pos_raw != '':
+                position_raw_mapping[pos_raw] += 1
+        
+        print("\nPosition Raw -> Normalized mapping:")
+        for pos_raw in sorted(position_raw_mapping.keys()):
+            codes = extract_position_codes(pos_raw)
+            if codes:
+                normalized = '/'.join(sorted(codes))
+            else:
+                normalized = 'Skip'
+            count = position_raw_mapping[pos_raw]
+            print(f"  {pos_raw}: {count} = {normalized}")
+        
+        # Position distribution (normalized)
         position_counts = defaultdict(int)
         for pos in self.df['Position'].dropna():
             if str(pos) != 'nan':
                 for code in str(pos).split('/'):
                     position_counts[code] += 1
         
-        print("\nPosition distribution:")
+        print("\nNormalized position distribution:")
         for pos in sorted(position_counts.keys()):
             print(f"  {pos}: {position_counts[pos]}")
             self.stats[f'position_{pos}'] = position_counts[pos]
