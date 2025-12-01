@@ -24,6 +24,7 @@ from scraper.coaches_cache import load_coaches_cache, get_coaches_for_team, pack
 from scraper.coaches import find_coaches_page_url, parse_coaches_from_html
 from scraper.utils import fetch_html
 from scraper.logging_utils import setup_logging, get_logger
+from scraper.rpi_lookup import build_rpi_lookup
 
 logger = get_logger(__name__)
 
@@ -183,6 +184,14 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
     logger.info("Parsing incoming players...")
     incoming_players = parse_incoming_players()
     
+    # Build RPI lookup
+    logger.info("Fetching RPI data...")
+    rpi_lookup = build_rpi_lookup()
+    if rpi_lookup:
+        logger.info(f"Loaded RPI data for {len(rpi_lookup)} teams")
+    else:
+        logger.warning("No RPI data available")
+    
     # Load coaches cache (if enabled)
     coaches_cache = {}
     if use_coaches_cache and not refresh_coaches:
@@ -222,8 +231,11 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
         
         # Get team metadata
         conference = team_df["conference"].iloc[0] if "conference" in team_df.columns else ""
-        rank = team_df["rank"].iloc[0] if "rank" in team_df.columns else ""
-        record = team_df["record"].iloc[0] if "record" in team_df.columns else ""
+        
+        # Get RPI rank and record from RPI lookup
+        rpi_data = rpi_lookup.get(team_key, {})
+        rank = rpi_data.get("rpi_rank", "")
+        record = rpi_data.get("rpi_record", "")
         roster_url = team_info.get("url", "")
         stats_url = team_info.get("stats_url", "")
         
