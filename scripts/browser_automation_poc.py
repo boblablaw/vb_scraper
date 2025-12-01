@@ -20,6 +20,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select
 from webdriver_manager.chrome import ChromeDriverManager
 
 
@@ -181,9 +182,30 @@ def scrape_lsu_roster(driver, year=2025):
         return []
 
 
+def get_available_stats_years(driver):
+    """
+    Get list of available years from stats page dropdown.
+    
+    Returns:
+        list: Available year values
+    """
+    try:
+        year_dropdown = driver.find_element(By.ID, "cumestats_season")
+        select = Select(year_dropdown)
+        years = [option.get_attribute('value') for option in select.options]
+        return years
+    except Exception as e:
+        print(f"Could not get available years: {e}")
+        return []
+
+
 def scrape_lsu_stats(driver, year=2025):
     """
     Scrape statistics from LSU volleyball stats page.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        year: Season year to select (default: 2025)
     
     Returns:
         list: Player stat dictionaries
@@ -195,6 +217,22 @@ def scrape_lsu_stats(driver, year=2025):
     
     # Dismiss cookie popup if present
     dismiss_cookie_popup(driver)
+    
+    # Select year from dropdown
+    try:
+        print(f"Selecting year: {year}")
+        year_dropdown = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "cumestats_season"))
+        )
+        select = Select(year_dropdown)
+        select.select_by_value(str(year))
+        print(f"✓ Selected year {year}")
+        
+        # Wait for stats to reload after year change
+        time.sleep(2)
+    except Exception as e:
+        print(f"Warning: Could not select year - {e}")
+        print("Continuing with default year...")
     
     try:
         # Wait for stats table to load
@@ -355,9 +393,19 @@ def main():
         # Analyze stats page structure
         analyze_page_structure(driver, "https://lsusports.net/sports/vb/cumestats/")
         
-        # Scrape stats
+        # Check available years
         print("\n" + "="*60)
-        stats = scrape_lsu_stats(driver)
+        driver.get("https://lsusports.net/sports/vb/cumestats/")
+        dismiss_cookie_popup(driver)
+        time.sleep(2)
+        
+        available_years = get_available_stats_years(driver)
+        if available_years:
+            print(f"Available stats years: {', '.join(available_years)}")
+        
+        # Scrape stats for current year (2025)
+        print("\n" + "="*60)
+        stats = scrape_lsu_stats(driver, year=2025)
         
         if stats:
             print(f"\n✓ Successfully scraped {len(stats)} stat entries")
