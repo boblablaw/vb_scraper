@@ -7,7 +7,7 @@ from typing import Dict, List
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from .utils import normalize_text, excel_protect_phone
+from .utils import normalize_text
 from logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -346,6 +346,6 @@ def pack_coaches_for_row(coaches: List[Dict[str, str]]) -> Dict[str, str]:
         out[f"coach{idx}_name"] = normalize_text(c.get("name", ""))
         out[f"coach{idx}_title"] = normalize_text(c.get("title", ""))
         out[f"coach{idx}_email"] = normalize_text(c.get("email", ""))
-        out[f"coach{idx}_phone"] = excel_protect_phone(c.get("phone", ""))
+        out[f"coach{idx}_phone"] = normalize_text(c.get("phone", ""))
 
     return out
