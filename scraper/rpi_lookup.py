@@ -84,6 +84,9 @@ def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
     rpi_df = rpi_df.dropna(subset=["team"])
 
     lookup: Dict[str, Dict[str, str]] = {}
+    
+    # Reverse the aliases dict: RPI name -> Your team name
+    rpi_to_team = {v: k for k, v in RPI_TEAM_NAME_ALIASES.items()}
 
     for _, row in rpi_df.iterrows():
         raw_name = normalize_text(row["team"])
@@ -93,8 +96,8 @@ def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
         rank = normalize_text(row.get("rank", ""))
         record = normalize_text(row.get("record", ""))
 
-        # Allow manual aliasing of NCAA names to your team config names
-        mapped_name = RPI_TEAM_NAME_ALIASES.get(raw_name, raw_name)
+        # Map RPI team name to your team config name using reversed aliases
+        mapped_name = rpi_to_team.get(raw_name, raw_name)
         key = normalize_school_key(mapped_name)
 
         lookup[key] = {
