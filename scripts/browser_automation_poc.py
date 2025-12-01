@@ -119,10 +119,19 @@ def scrape_lsu_roster(driver, year=2025):
         
         print(f"Found {len(rows)} roster rows")
         
-        for row in rows:
+        for idx, row in enumerate(rows):
             try:
                 cells = row.find_elements(By.TAG_NAME, "td")
+                
+                # Debug: print cell count for first few rows
+                if idx < 3:
+                    print(f"  Row {idx}: {len(cells)} cells")
+                    if cells:
+                        print(f"    First cell text: '{cells[0].text[:50]}'")
+                
                 if not cells or len(cells) < 5:
+                    if idx < 3:
+                        print(f"    Skipping - not enough cells")
                     continue
                 
                 player = {}
@@ -134,22 +143,25 @@ def scrape_lsu_roster(driver, year=2025):
                 # Cell 3: Height
                 # Cell 4: Class
                 
-                # Extract name - might be nested
-                name_text = cells[1].text.strip()
+                # Extract name - use innerText for DataTables compatibility
+                name_text = cells[1].get_attribute('innerText').strip() if cells[1].get_attribute('innerText') else ''
                 # Remove pronunciation icon text if present
                 if "Hear how to pronounce" in name_text:
                     name_text = name_text.split("Hear how to pronounce")[0].strip()
                 player["name"] = name_text
                 
-                player["position"] = cells[2].text.strip()
-                player["height"] = cells[3].text.strip()
-                player["class"] = cells[4].text.strip()
+                player["position"] = cells[2].get_attribute('innerText').strip() if cells[2].get_attribute('innerText') else ''
+                player["height"] = cells[3].get_attribute('innerText').strip() if cells[3].get_attribute('innerText') else ''
+                player["class"] = cells[4].get_attribute('innerText').strip() if cells[4].get_attribute('innerText') else ''
                 
                 if player["name"]:
                     players.append(player)
+                else:
+                    if idx < 3:
+                        print(f"    Skipping - no name found")
                     
             except Exception as e:
-                print(f"Error parsing roster row: {e}")
+                print(f"Error parsing roster row {idx}: {e}")
                 continue
         
         # If no players found, dump page source for analysis
