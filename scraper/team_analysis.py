@@ -122,7 +122,18 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         p["is_xfer_in"] = is_xfer_in
 
     # Filter out players with no position codes (likely staff)
+    filtered_players = [p for p in players if not p.get("position_codes")]
     players = [p for p in players if p.get("position_codes")]
+    
+    # Log filtered players to file for review
+    if filtered_players:
+        import os
+        filtered_log_path = os.path.join("exports", "filtered_staff_players.txt")
+        with open(filtered_log_path, "a", encoding="utf-8") as f:
+            for p in filtered_players:
+                f.write(f"{team_name}\t{p.get('name', 'UNKNOWN')}\t{p.get('position_raw', 'NO_POSITION')}\n")
+        logger.info("Filtered %d non-player entries for %s (logged to %s)", 
+                   len(filtered_players), team_name, filtered_log_path)
     
     if not players:
         logger.warning("No valid players after filtering staff for team %s", team_name)

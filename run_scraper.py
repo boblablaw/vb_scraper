@@ -90,6 +90,13 @@ def main():
     
     all_rows: List[Dict[str, Any]] = []
 
+    # Initialize filtered staff players log
+    filtered_log_path = os.path.join(EXPORT_DIR, "filtered_staff_players.txt")
+    with open(filtered_log_path, "w", encoding="utf-8") as f:
+        f.write("# Filtered non-player entries (likely staff)\n")
+        f.write("# Format: Team\tName\tPosition\n")
+        f.write("#" + "="*80 + "\n")
+
     logger.info("Building RPI lookup...")
     rpi_lookup = build_rpi_lookup()
 
