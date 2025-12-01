@@ -31,6 +31,7 @@ TEAM_NAME_MAP = {
     "coastal carolina": "Coastal Carolina University",
     "northern_colorado": "University of Northern Colorado",
     "northern colorado": "University of Northern Colorado",
+    "denver": "University of Denver",
     # Add more mappings as needed
 }
 
