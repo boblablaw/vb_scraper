@@ -28,6 +28,9 @@ MAIN_EXPORT = "exports/d1_rosters_2026_with_stats_and_incoming.tsv"
 # Map file name prefixes to official team names
 TEAM_NAME_MAP = {
     "coastal_carolina": "Coastal Carolina University",
+    "coastal carolina": "Coastal Carolina University",
+    "northern_colorado": "University of Northern Colorado",
+    "northern colorado": "University of Northern Colorado",
     # Add more mappings as needed
 }
 
@@ -36,9 +39,12 @@ def extract_team_from_filename(filename: str) -> str:
     """
     Extract team identifier from filename.
     Example: coastal_carolina_stats.csv -> coastal_carolina
+            northern colorado_stats(1).csv -> northern colorado
     """
     # Remove .csv extension
     base = filename.replace(".csv", "")
+    # Remove (1), (2), etc. suffix (browser download duplicates)
+    base = re.sub(r"\(\d+\)$", "", base).strip()
     # Remove _stats or _stats1 suffix
     base = re.sub(r"_stats\d*$", "", base)
     return base
