@@ -30,10 +30,8 @@ from scraper.utils import (
     normalize_player_name,
     normalize_school_key
 )
-from scraper.rpi_lookup import build_rpi_lookup
 from scraper.incoming_players import get_incoming_players
 from settings.transfers_config import OUTGOING_TRANSFERS
-from settings import RPI_TEAM_NAME_ALIASES
 
 
 def load_manual_rosters(manual_file: str = 'settings/manual_rosters.csv') -> pd.DataFrame:
@@ -80,9 +78,6 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
     print(f'Processing {len(manual_teams)} teams with manual data (will merge with scraped data)')
     
     # Load supplementary data
-    print('Loading RPI data...')
-    rpi_lookup = build_rpi_lookup()
-    
     print('Loading incoming players data...')
     incoming_players = get_incoming_players()
     
@@ -103,13 +98,6 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
         team_players_manual = manual_df[manual_df['Team'] == team]
         team_data = team_info.get(team, {})
         norm_school = normalize_school_key(team)
-        
-        # Get RPI data (apply alias first, then normalize)
-        rpi_name = RPI_TEAM_NAME_ALIASES.get(team, team)
-        rpi_key = normalize_school_key(rpi_name)
-        rpi_data = rpi_lookup.get(rpi_key)
-        rpi_rank = rpi_data.get('rpi_rank') if rpi_data else None
-        overall_record = rpi_data.get('rpi_record', '') if rpi_data else ''
         
         # Process each manual player entry
         for _, row in team_players_manual.iterrows():
@@ -173,21 +161,12 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
                 scraped_df.at[idx, 'Is Graduating'] = is_grad
                 scraped_df.at[idx, 'Is Outgoing Transfer'] = is_outgoing
                 scraped_df.at[idx, 'Is Incoming Transfer'] = is_incoming
-                # Update RPI data if available
-                if rpi_rank is not None:
-                    scraped_df.at[idx, 'Team Rpi Rank'] = rpi_rank
-                if overall_record:
-                    scraped_df.at[idx, 'Team Overall Record'] = overall_record
                 manual_updates.append(('updated', team, name))
             else:
                 # Add new player - create row with all scraped columns
                 new_row = {
                     'Team': team,
                     'Conference': team_data.get('conference', ''),
-                    'Roster Url': team_data.get('url', ''),
-                    'Stats Url': team_data.get('stats_url', ''),
-                    'Team Rpi Rank': rpi_rank,
-                    'Team Overall Record': overall_record,
                     'Name': name,
                     'Position Raw': position_raw,
                     'Position': position_normalized,
@@ -359,8 +338,8 @@ def main():
     print()
     
     # Parse command line arguments for custom paths
-    scraped_file = 'exports/d1_rosters_2025_with_stats_and_incoming.csv'
-    output_file = 'exports/d1_rosters_2025_with_stats_and_incoming.csv'
+    scraped_file = 'exports/rosters_and_stats.csv'
+    output_file = 'exports/rosters_and_stats.csv'
     
     if '--output' in sys.argv:
         idx = sys.argv.index('--output')

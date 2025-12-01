@@ -685,7 +685,7 @@ class DataValidator:
 
 
 if __name__ == "__main__":
-    csv_path = "exports/d1_rosters_2026_with_stats_and_incoming.csv"
+    csv_path = "exports/rosters_and_stats.csv"
     log_path = "exports/scraper.log"
     
     validator = DataValidator(csv_path, log_path)

@@ -18,7 +18,7 @@ from .logging_utils import get_logger
 logger = get_logger(__name__)
 
 
-def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]]) -> List[Dict[str, Any]]:
+def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]] | None = None) -> List[Dict[str, Any]]:
     team_name = team_info["team"]
     conference = team_info.get("conference", "")
     roster_url = team_info["url"]
@@ -37,23 +37,6 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
     if not players:
         logger.warning("No players parsed for team %s from %s", team_name, roster_url)
         return []
-
-#    for p in players:
-#        logger.info(
-#            "DEBUG ROSTER %s: name=%r pos=%r class_raw=%r height_raw=%r",
-#            team_name,
-#            p.get("name"),
-#            p.get("position"),
-#            p.get("class_raw"),
-#            p.get("height_raw"),
-#        )
-
-    # RPI
-    rpi_name = RPI_TEAM_NAME_ALIASES.get(team_name, team_name)
-    rpi_key = normalize_school_key(rpi_name)
-    rpi_data = rpi_lookup.get(rpi_key, {})
-    rpi_rank = rpi_data.get("rpi_rank", "")
-    rpi_record = rpi_data.get("rpi_record", "")
 
     # Per-player normalization
     for p in players:
@@ -92,14 +75,9 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         base: Dict[str, Any] = {
             "team": team_name,
             "conference": conference,
-            "rank": rpi_rank,
-            "record": rpi_record,
-
             "name": p["name"],
             "position": position_raw,
-
             "class": class_norm,
-
             "height": height_norm,
         }
 

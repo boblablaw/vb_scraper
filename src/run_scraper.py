@@ -9,7 +9,6 @@ import os
 from typing import Any, Dict, List
 
 from settings.teams_urls import get_teams_with_year_urls, get_season_year
-from scraper.rpi_lookup import build_rpi_lookup
 from scraper.team_analysis import analyze_team
 from scraper.logging_utils import setup_logging, get_logger
 
@@ -106,11 +105,8 @@ def main():
         f.write("# Format: Team\tName\tPosition\n")
         f.write("#" + "="*80 + "\n")
 
-    logger.info("Building RPI lookup...")
-    rpi_lookup = build_rpi_lookup()
-
     for team_info in teams_to_scrape:
-        rows = analyze_team(team_info, rpi_lookup)
+        rows = analyze_team(team_info, rpi_lookup=None)
         all_rows.extend(rows)
         time.sleep(REQUEST_DELAY)
 
@@ -150,8 +146,6 @@ def main():
     base_fields = [
         "team",
         "conference",
-        "rank",
-        "record",
         "name",
         "position",
         "class",

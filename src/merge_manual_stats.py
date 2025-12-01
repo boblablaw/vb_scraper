@@ -23,7 +23,7 @@ from pathlib import Path
 from scraper.utils import normalize_player_name, normalize_school_key
 
 STATS_DIR = "stats"
-MAIN_EXPORT = "exports/d1_rosters_2026_with_stats_and_incoming.csv"
+MAIN_EXPORT = "exports/rosters_and_stats.csv"
 
 # Map file name prefixes to official team names
 # Note: Auto-matching using normalize_school_key is attempted first
@@ -218,9 +218,9 @@ def merge_stats_for_team(team_name: str, stats_files: list, main_df: pd.DataFram
     
     print(f"  Matched {matched} players")
     if unmatched_export:
-        print(f"  Export players without stats: {', '.join(unmatched_export[:5])}")
+        print(f"  Export players without stats: {', '.join(str(p) for p in unmatched_export[:5])}")
     if unmatched_stats:
-        print(f"  Stats players not in export: {', '.join(unmatched_stats[:5])}")
+        print(f"  Stats players not in export: {', '.join(str(p) for p in unmatched_stats[:5])}")
     
     return main_df
 
