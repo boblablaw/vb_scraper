@@ -196,11 +196,40 @@ def merge_stats_for_team(team_name: str, stats_files: list, main_df: pd.DataFram
         
         if matched_stats:
             # Update stats in main dataframe
+            # Map internal stat names to CSV abbreviated headers
+            stat_col_map = {
+                'matches_started': 'MS',
+                'matches_played': 'MP',
+                'sets_played': 'SP',
+                'points': 'PTS',
+                'points_per_set': 'PTS/S',
+                'kills': 'K',
+                'kills_per_set': 'K/S',
+                'attack_errors': 'AE',
+                'total_attacks': 'TA',
+                'hitting_pct': 'HIT%',
+                'assists': 'A',
+                'assists_per_set': 'A/S',
+                'aces': 'SA',
+                'aces_per_set': 'SA/S',
+                'service_errors': 'SE',
+                'digs': 'D',
+                'digs_per_set': 'D/S',
+                'reception_errors': 'RE',
+                'total_reception_attempts': 'TRE',
+                'reception_pct': 'Rec%',
+                'block_solos': 'BS',
+                'block_assists': 'BA',
+                'total_blocks': 'TB',
+                'blocks_per_set': 'B/S',
+                'ball_handling_errors': 'BHE',
+            }
+            
             for stat_col, stat_val in matched_stats.items():
-                # Map to friendly column name
-                friendly_col = stat_col.replace('_', ' ').title()
-                if friendly_col in main_df.columns:
-                    main_df.at[idx, friendly_col] = stat_val
+                # Map to abbreviated column name
+                csv_col = stat_col_map.get(stat_col, stat_col)
+                if csv_col in main_df.columns:
+                    main_df.at[idx, csv_col] = stat_val
             matched += 1
         else:
             unmatched_export.append(player_row['Name'])
