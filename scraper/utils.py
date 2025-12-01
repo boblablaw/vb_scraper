@@ -128,13 +128,19 @@ def normalize_class(raw: str) -> str:
     s = re.sub(r"[^a-z0-9\s\-]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
 
+    # Handle First Year (FY) variations
+    if s in ("fy", "fy ", "first year", "first-year", "firstyear"):
+        return "Fr"
+    if s in ("rfr", "rfr ", "r-fy", "r fy", "rf", "rf ", "rfy", "r-fy ", "r-fr"):
+        return "R-Fr"
+
     redshirt = False
     base = ""
 
     if "redshirt" in s or s.startswith("r "):
         redshirt = True
 
-    if "fresh" in s or re.search(r"\bfr\b", s):
+    if "fresh" in s or re.search(r"\bfr\b", s) or "first year" in s or re.search(r"\bfy\b", s):
         base = "Fr"
     elif "soph" in s or re.search(r"\bso\b", s):
         base = "So"
@@ -142,7 +148,7 @@ def normalize_class(raw: str) -> str:
         base = "Jr"
     elif "senior" in s or re.search(r"\bsr\b", s):
         base = "Sr"
-    elif "fifth" in s or "5th" in s:
+    elif "fifth" in s or "5th" in s or "6th" in s or "sixth" in s:
         base = "Fifth"
     elif "grad" in s or re.search(r"\bgr\b", s):
         base = "Gr"
@@ -227,12 +233,23 @@ def extract_position_codes(position: str) -> Set[str]:
     """
     Map a raw roster position string into a set of normalized codes:
       S, RS, OH, MB, DS
+    Returns empty set if position looks like staff/coach role.
     """
     p_raw = normalize_text(position)
     if not p_raw:
         return set()
 
     p = p_raw.lower().replace(".", " ").strip()
+    
+    # Filter out staff positions
+    staff_keywords = [
+        "coach", "assistant", "director", "consultant", "coordinator",
+        "analyst", "trainer", "manager", "intern", "video", "strength",
+        "operations", "development", "technical", "volunteer", "graduate assistant"
+    ]
+    if any(kw in p for kw in staff_keywords):
+        return set()
+    
     parts = re.split(r"[\/,;]+", p)
     tokens: List[str] = []
     for part in parts:
@@ -241,18 +258,37 @@ def extract_position_codes(position: str) -> Set[str]:
     joined = " ".join(tokens)
     codes: Set[str] = set()
 
+    # Setter
     if "setter" in joined or re.search(r"\bs\b", joined):
         codes.add("S")
 
-    if "opp" in joined or "opposite" in joined or "right side" in joined or re.search(r"\brs\b", joined):
+    # Right side / Opposite / Rightside Hitter
+    if (
+        "opp" in joined 
+        or "opposite" in joined 
+        or "right side" in joined
+        or "rightside" in joined
+        or re.search(r"\brs\b", joined)
+        or re.search(r"\brh\b", joined)
+    ):
         codes.add("RS")
 
+    # Middle blocker
     if "middle" in joined or re.search(r"\bmb\b", joined) or re.search(r"\bmh\b", joined):
         codes.add("MB")
 
-    if "outside" in joined or "pin" in joined or re.search(r"\boh\b", joined):
+    # Outside hitter / Left side / Pin
+    if (
+        "outside" in joined 
+        or "pin" in joined 
+        or "left side" in joined
+        or "left" in joined
+        or re.search(r"\boh\b", joined)
+        or re.search(r"\bls\b", joined)
+    ):
         codes.add("OH")
 
+    # Defensive specialist / Libero
     if (
         "libero" in joined
         or "defensive specialist" in joined
@@ -260,6 +296,23 @@ def extract_position_codes(position: str) -> Set[str]:
         or any(t in {"l", "lib"} for t in tokens)
     ):
         codes.add("DS")
+    
+    # Handle special combined positions
+    # "Utility" = OH/DS, "UU" = OH/DS
+    if "utility" in joined or re.search(r"\butl\b", joined) or re.search(r"\buu\b", joined):
+        codes.add("OH")
+        codes.add("DS")
+    
+    # "Opposite/Setter" = S/RS
+    if ("opposite" in joined or "opp" in joined) and "setter" in joined:
+        codes.add("S")
+        codes.add("RS")
+    
+    # "Opposite Hitter/Middle Blocker" = RS/MB (already handled by individual checks above)
+    # But explicitly handle if we see both in the string
+    if ("opposite" in joined or "opp" in joined) and "middle" in joined:
+        codes.add("RS")
+        codes.add("MB")
 
     return codes
 

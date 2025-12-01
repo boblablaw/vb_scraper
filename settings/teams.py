@@ -936,7 +936,7 @@ TEAMS = [
         "stats_url": "https://csuvikings.com/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "University of Wisconsinï¿½ Green Bay",
+        "team": "University of Wisconsin-Green Bay",
         "conference": "Horizon League",
         "url": "https://greenbayphoenix.com/sports/womens-volleyball/roster",
         "stats_url": "https://greenbayphoenix.com/sports/womens-volleyball/stats/2025",
@@ -948,7 +948,7 @@ TEAMS = [
         "stats_url": "https://athletics.uindy.edu/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "University of WisconsinâMilwaukee",
+        "team": "University of Wisconsin-Milwaukee",
         "conference": "Horizon League",
         "url": "https://mkepanthers.com/sports/womens-volleyball/roster",
         "stats_url": "https://mkepanthers.com/sports/womens-volleyball/stats/2025",
@@ -1370,7 +1370,7 @@ TEAMS = [
     {
         "team": "Central Connecticut State University",
         "conference": "NEC",
-        "url": "https://ccsubluedevils.com/sports/womens-volleyball/roster",
+        "url": "https://ccsubluedevils.com/sports/wvball/roster",
         "stats_url": "https://ccsubluedevils.com/sports/womens-volleyball/stats/2025",
     },
     {
@@ -1400,14 +1400,14 @@ TEAMS = [
     {
         "team": "Mercyhurst University[c]",
         "conference": "NEC",
-        "url": "https://hurstathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://hurstathletics.com/sports/womens-volleyball/stats/2025",
+        "url": "https://mercyhurst.edu/athletics/womens-volleyball",
+        "stats_url": "https://mercyhurst.edu/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "University of New Haven",
         "conference": "NEC",
-        "url": "https://newhavenchargers.com/sports/womens-volleyball/roster",
-        "stats_url": "https://newhavenchargers.com/sports/womens-volleyball/stats/2025",
+        "url": "https://newhaven.edu/athletics/womens-volleyball",
+        "stats_url": "https://newhaven.edu/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Saint Francis University (Saint Francis (PA))[n]",
@@ -1472,8 +1472,8 @@ TEAMS = [
     {
         "team": "Tennessee Technological University",
         "conference": "Ohio Valley Conference",
-        "url": "https://ttusports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://ttusports.com/sports/womens-volleyball/stats/2025",
+        "url": "https://tntech.edu/athletics/womens-volleyball",
+        "stats_url": "https://tntech.edu/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "University of Tennessee at Martin (UT Martin)",
@@ -1694,8 +1694,8 @@ TEAMS = [
     {
         "team": "East Texas A&M University",
         "conference": "Southland Conference",
-        "url": "https://lionathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://lionathletics.com/sports/womens-volleyball/stats/2025",
+        "url": "https://tamucathletics.com/sports/wvball/roster",
+        "stats_url": "https://tamucathletics.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Houston Christian University",
@@ -1760,8 +1760,8 @@ TEAMS = [
     {
         "team": "University of Texas Rio Grande Valley",
         "conference": "Southland Conference",
-        "url": "https://goutrgv.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goutrgv.com/sports/womens-volleyball/stats/2025",
+        "url": "https://gorivervaqueros.com/sports/womens-volleyball/roster",
+        "stats_url": "https://gorivervaqueros.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Alabama A&M University",
@@ -1782,7 +1782,7 @@ TEAMS = [
         "stats_url": "https://alcornsports.com/sports/womens-volleyball/stats/2025",
     },
     {
-        "team": "BethuneâCookman University",
+        "team": "Bethune-Cookman University",
         "conference": "Southwestern Athletic Conference",
         "url": "https://bcuathletics.com/sports/womens-volleyball/roster",
         "stats_url": "https://bcuathletics.com/sports/womens-volleyball/stats/2025",
@@ -1802,14 +1802,14 @@ TEAMS = [
     {
         "team": "Jackson State University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://gojsutigers.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gojsutigers.com/sports/womens-volleyball/stats/2025",
+        "url": "https://jsutigers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://jsutigers.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Mississippi Valley State University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://mvsusports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://mvsusports.com/sports/womens-volleyball/stats/2025",
+        "url": "https://mvsuathletics.com/index.aspx?path=wvball",
+        "stats_url": "https://mvsuathletics.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Prairie View A&M University",
@@ -1826,8 +1826,8 @@ TEAMS = [
     {
         "team": "Texas Southern University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://tsusports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://tsusports.com/sports/womens-volleyball/stats/2025",
+        "url": "https://tsuball.com/index.aspx?path=wvball",
+        "stats_url": "https://tsuball.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "University of Denver",
@@ -1928,8 +1928,8 @@ TEAMS = [
     {
         "team": "Marshall University",
         "conference": "Sun Belt Conference",
-        "url": "https://herdzone.com/sports/womens-volleyball/roster",
-        "stats_url": "https://herdzone.com/sports/womens-volleyball/stats/2025",
+        "url": "https://gomarshall.com/sports/womens-volleyball/roster",
+        "stats_url": "https://gomarshall.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Old Dominion University",
@@ -2066,8 +2066,8 @@ TEAMS = [
     {
         "team": "University of Texas at Arlington",
         "conference": "Western Athletic Conference",
-        "url": "https://utamavs.com/sports/womens-volleyball/roster",
-        "stats_url": "https://utamavs.com/sports/womens-volleyball/stats/2025",
+        "url": "https://utamavericks.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utamavericks.com/sports/womens-volleyball/stats/2025",
     },
     {
         "team": "Utah Tech University",

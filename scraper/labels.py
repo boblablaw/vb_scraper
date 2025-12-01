@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Set
 
-from utils import (
+from .utils import (
     normalize_text,
     extract_position_codes,
     normalize_class,

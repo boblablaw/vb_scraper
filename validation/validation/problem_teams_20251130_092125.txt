@@ -1,0 +1,178 @@
+# Teams that need attention
+# Generated: 2025-11-30 09:21:25
+# Total: 93 teams
+
+Arizona State University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Auburn University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Boston College
+  # Missing 95% classes
+Bradley University
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Central Connecticut State University
+Coastal Carolina University
+East Texas A&M University
+Furman University
+Gonzaga University
+Jackson State University
+James Madison University
+Lafayette College
+Lamar University
+Le Moyne College
+Long Island University (LIU)
+Louisiana State University
+Marshall University
+Mercer University
+Mercyhurst University[c]
+Miami University (Miami (Ohio))
+  # Missing 100% positions
+Middle Tennessee State University
+Mississippi State University
+  # Small roster: 3 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Mississippi Valley State University
+Murray State University
+  # Small roster: 2 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Northwestern University
+  # Small roster: 2 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Old Dominion University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Oregon State University
+Pennsylvania State University
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Purdue University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Quinnipiac University
+Saint Mary's College of California
+San Diego State University
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+San Jose State University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Santa Clara University
+Seattle University
+Seton Hall University
+St. John's University
+Stanford University
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Stephen F. Austin State University
+Temple University
+Tennessee Technological University
+Texas Southern University
+Texas Tech University
+The Citadel
+The Ohio State University
+  # Small roster: 2 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+The University of Southern Mississippi
+Troy University
+University of Alabama
+University of Alabama at Birmingham
+University of Arkansas
+University of Central Florida
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+University of Cincinnati
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+University of Denver
+University of Florida
+University of Georgia
+University of Idaho
+University of Iowa
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+University of Kentucky
+University of Missouri
+University of Missouri-Kansas City
+University of Montana
+University of New Haven
+University of New Mexico
+University of New Orleans
+University of North Carolina
+University of North Carolina Asheville
+  # Large roster: 29 players
+  # Missing 100% classes
+University of North Carolina Wilmington
+  # Small roster: 9 players
+University of North Carolina at Charlotte
+  # Small roster: 2 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+University of North Dakota
+University of Northern Colorado
+  # Small roster: 5 players
+  # Missing 100% positions
+  # Missing 100% classes
+University of Oklahoma
+University of Oregon
+University of Portland
+University of San Diego
+University of San Francisco
+University of South Carolina
+University of South Dakota
+University of Southern California
+University of St. Thomas
+University of Tennessee
+University of Texas
+University of Texas Rio Grande Valley
+University of Texas at Arlington
+University of Toledo
+University of Wyoming
+University of the Pacific
+Utah State University
+Utah Tech University
+Vanderbilt University
+Virginia Tech
+  # Missing 25 heights
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Washington State University
+West Virginia University
+  # Small roster: 2 players
+  # Missing 100% positions
+  # Missing 100% heights
+  # Missing 100% classes
+Xavier University

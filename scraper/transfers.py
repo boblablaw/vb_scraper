@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from incoming_players import INCOMING_PLAYERS
+from .incoming_players import INCOMING_PLAYERS
 from settings import OUTGOING_TRANSFERS
 
-from utils import normalize_text, normalize_school_key, extract_position_codes
+from .utils import normalize_text, normalize_school_key, extract_position_codes
 from logging_utils import get_logger
 
 logger = get_logger(__name__)
