@@ -15,7 +15,7 @@ The `test_settings.py` file contains comprehensive unit tests to verify that:
 
 ```bash
 # From the project root
-python test_settings.py
+python -m tests.test_settings
 ```
 
 ### With Dependencies Installed
@@ -27,7 +27,7 @@ If you have all dependencies installed (pandas, beautifulsoup4, requests), all t
 source venv/bin/activate
 
 # Run tests
-python test_settings.py
+python -m tests.test_settings
 ```
 
 ### Without Dependencies
@@ -52,13 +52,13 @@ Tests that configuration data is correctly accessible from the settings package.
 Tests that modules dependent on configuration data can successfully import from the settings package.
 
 **Test Cases:**
-- `test_run_scraper_imports_teams` - Verifies run_scraper.py can import TEAMS
-- `test_team_analysis_imports_rpi_aliases` - Verifies team_analysis.py can import RPI_TEAM_NAME_ALIASES
-- `test_rpi_lookup_imports_aliases` - Verifies rpi_lookup.py can import RPI_TEAM_NAME_ALIASES
-- `test_transfers_imports_outgoing_transfers` - Verifies transfers.py can import OUTGOING_TRANSFERS
-- `test_team_pivot_imports_outgoing_transfers` - Verifies team_pivot.py can import OUTGOING_TRANSFERS
-- `test_export_transfers_imports_outgoing_transfers` - Verifies export_transfers.py can import OUTGOING_TRANSFERS
-- `test_incoming_players_module_accessible` - Verifies incoming_players.py can access RAW_INCOMING_TEXT
+- `test_run_scraper_imports_teams` - Verifies src/run_scraper.py can import TEAMS from teams_urls.py
+- `test_team_analysis_imports_rpi_aliases` - Verifies scraper/team_analysis.py can import RPI_TEAM_NAME_ALIASES
+- `test_rpi_lookup_imports_aliases` - Verifies scraper/rpi_lookup.py can import RPI_TEAM_NAME_ALIASES
+- `test_transfers_imports_outgoing_transfers` - Verifies scraper/transfers.py can import OUTGOING_TRANSFERS
+- `test_team_pivot_imports_outgoing_transfers` - Verifies src/create_team_pivot_csv.py can import OUTGOING_TRANSFERS
+- `test_export_transfers_imports_outgoing_transfers` - Verifies src/create_transfers_csv.py can import OUTGOING_TRANSFERS
+- `test_incoming_players_module_accessible` - Verifies year-based incoming_players_data system is accessible
 
 ### TestSettingsDataConsistency
 
@@ -75,9 +75,10 @@ Tests consistency and relationships between different settings data.
 The test suite covers:
 
 ✅ **Settings Package Structure**
-- All four configuration files (teams.py, transfers_config.py, rpi_team_name_aliases.py, incoming_players_data.py)
+- Configuration files (teams_urls.py, transfers_config.py, rpi_team_name_aliases.py, incoming_players_data.py, year-specific incoming_players_data_YYYY.py)
 - Package __init__.py exports
 - Data types and structure validation
+- Year-based URL and incoming players systems
 
 ✅ **Import Verification**
 - Direct imports from settings package
@@ -85,10 +86,11 @@ The test suite covers:
 - Cross-module import consistency
 
 ✅ **Data Validation**
-- TEAMS list contains required fields (team, conference, url, stats_url)
+- TEAMS list contains required fields (team, conference, url, stats_url) from teams_urls.py
+- Year-based URL system (get_season_year, append_year_to_url, get_teams_with_year_urls)
 - OUTGOING_TRANSFERS contains required fields (name, old_team, new_team)
 - RPI_TEAM_NAME_ALIASES is properly formatted
-- RAW_INCOMING_TEXT contains expected conference structure
+- Year-based incoming players data system (automatic year selection)
 
 ✅ **Data Consistency**
 - Team names are unique
@@ -132,7 +134,7 @@ Make sure you're running the tests from the project root directory:
 
 ```bash
 cd /path/to/vb_scraper
-python test_settings.py
+python -m tests.test_settings
 ```
 
 ### Tests Failing After Configuration Changes
@@ -174,7 +176,7 @@ These tests can be integrated into CI/CD pipelines:
 
 ```bash
 # Run tests and exit with appropriate code
-python test_settings.py
+python -m tests.test_settings
 ```
 
 Exit code 0 indicates all tests passed; non-zero indicates failure.

@@ -34,17 +34,17 @@ Web scraper for Division 1 Women's Volleyball programs. Collects roster data, pl
 # Activate virtual environment
 source venv/bin/activate
 
-# Run full scraper (takes ~10-15 minutes)
-python run_scraper.py
+# Run full scraper (takes ~10-15 minutes, auto-detects year)
+python -m src.run_scraper
+
+# Optional: Specify year explicitly
+python -m src.run_scraper --year 2025
 
 # Generate team-level pivot table
-python team_pivot.py
+python -m src.create_team_pivot_csv
 
 # Validate data quality
-python scripts/validate_exports.py --full
-
-# Check coverage
-python scripts/compare_export_to_teams.py
+python validation/validate_data.py
 ```
 
 ## Outputs
@@ -58,13 +58,17 @@ All files written to `exports/`:
 ## Architecture
 
 ```
-settings/teams.py → run_scraper.py → team_analysis.py
-                         ↓                ↓
-                    roster.py         stats.py
-                    coaches.py        transfers.py
-                    rpi_lookup.py     incoming_players.py
-                         ↓
-                   exports/*.csv
+settings/teams_urls.py (year-based URLs) → src/run_scraper.py → team_analysis.py
+                                                ↓                      ↓
+                                           roster.py               stats.py
+                                           coaches.py              transfers.py
+                                           rpi_lookup.py
+                                                ↓
+                                          exports/*.csv
+                                                ↓
+src/create_team_pivot_csv.py ← settings/incoming_players_data.py (year-based)
+        ↓
+exports/d1_team_pivot_2025.csv
 ```
 
 **Core Parsers** (in `roster.py`):
@@ -106,36 +110,35 @@ Domain problems or access restrictions:
 
 ### Data Quality
 ```bash
-# Basic validation
-python scripts/validate_exports.py
+# Run validation
+python validation/validate_data.py
 
-# Full validation with detailed report
-python scripts/validate_exports.py --full
-```
-
-### Coverage Analysis
-```bash
-# Compare export to settings
-python scripts/compare_export_to_teams.py
-
-# Output: exports/missing_teams.tsv
-```
-
-### HTML Debugging
-```bash
-# Snapshot failing teams
-python scripts/snapshot_html.py --team "School Name"
-
-# Snapshots from TSV file
-python scripts/snapshot_html.py --teams-file exports/missing_teams.tsv
+# Output: validation/reports/validation_report_*.md
+#         validation/reports/problem_teams_*.txt
 ```
 
 ### Targeted Scraping
 ```bash
 # Scrape specific teams
-python run_scraper.py --team "University of Alabama" --team "LSU"
+python -m src.run_scraper --team "University of Alabama" --team "LSU"
 
-# Useful for testing fixes
+# Scrape with specific year
+python -m src.run_scraper --year 2024 --team "Stanford University"
+
+# Custom output filename
+python -m src.run_scraper --output test_export_2025
+```
+
+### Incoming Players Management
+```bash
+# Export incoming players data to CSV
+python scripts/export_incoming_players.py --year 2026
+
+# List available years
+python scripts/export_incoming_players.py --list
+
+# Custom output path
+python scripts/export_incoming_players.py --year 2026 --output exports/incoming_2026.csv
 ```
 
 ## Future Roadmap
@@ -161,10 +164,10 @@ python run_scraper.py --team "University of Alabama" --team "LSU"
 
 ```bash
 # Run all unit tests
-python test_settings.py
+python -m tests.test_settings
 
 # Check specific team
-python run_scraper.py --team "Marshall University"
+python -m src.run_scraper --team "Marshall University"
 grep "Marshall" exports/scraper.log
 ```
 
@@ -175,18 +178,19 @@ grep "Marshall" exports/scraper.log
 # Weekly: Check for new failures
 grep "No players parsed" exports/scraper.log | wc -l
 
-# Monthly: Verify coverage
-python scripts/compare_export_to_teams.py
-
 # Quarterly: Full data quality audit
-python scripts/validate_exports.py --full
+python validation/validate_data.py
 ```
 
 ### When Sites Change
-1. Snapshot HTML: `python scripts/snapshot_html.py --team "School"`
-2. Analyze structure: Check `fixtures/html/school.html`
-3. Update parser or URL in `settings/teams.py`
-4. Test: `python run_scraper.py --team "School"`
+1. Update URL in `settings/teams_urls.py` (base URL without year)
+2. Test: `python -m src.run_scraper --team "School"`
+3. Check logs: `grep "School" exports/scraper.log`
+
+### Adding Incoming Players
+1. Edit appropriate year file: `settings/incoming_players_data_YYYY.py`
+2. See format in `settings/INCOMING_PLAYERS_README.md`
+3. Verify: `python scripts/export_incoming_players.py --year YYYY`
 
 ## Documentation
 

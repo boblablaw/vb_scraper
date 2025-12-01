@@ -193,8 +193,8 @@ playwright install chromium
 
 **Tasks**:
 1. Research new domains for Wyoming, New Mexico, etc.
-2. Update URLs in `settings/teams.py` if found
-3. Create `KNOWN_LIMITATIONS.md` documenting unavailable teams
+2. Update URLs in `settings/teams_urls.py` if found (base URLs without year)
+3. Update `KNOWN_LIMITATIONS.md` documenting unavailable teams
 4. Add skip logic in scraper for documented failures
 
 **Expected Outcome**: 335-340 teams (96.5-98% coverage)
@@ -244,10 +244,10 @@ playwright install chromium
 - **Cost**: Additional runtime (~2-5min per team vs. ~1-2sec)
 
 ### Best Practices
-1. Run `scripts/compare_export_to_teams.py` after each full scrape
+1. Run `python validation/validate_data.py` after each full scrape
 2. Monitor `exports/scraper.log` for new "No players parsed" warnings
-3. Keep `fixtures/html/` snapshots of failing teams
-4. Update parsers incrementally as sites evolve
+3. Update parsers incrementally as sites evolve in `scraper/roster.py`
+4. Keep `settings/teams_urls.py` URLs updated (base URLs without year)
 5. Consider setting up scheduled scraping (cron job)
 
 ---
@@ -295,7 +295,7 @@ with open('fixtures/html/pacific.html') as f:
 "
 
 # 2. Test new parser
-python run_scraper.py --team "University of the Pacific"
+python -m src.run_scraper --team "University of the Pacific"
 
 # 3. Validate
 grep "Pacific" exports/scraper.log
@@ -310,7 +310,7 @@ brew install chromedriver  # macOS
 # 2. Create browser_scraper.py (see code above)
 
 # 3. Test with one school
-python run_scraper.py --team "University of Alabama" --use-browser
+python -m src.run_scraper --team "University of Alabama" --use-browser
 
 # 4. Roll out to all JS-rendered schools
 ```
@@ -320,10 +320,10 @@ python run_scraper.py --team "University of Alabama" --use-browser
 ## Questions?
 
 See:
-- `scripts/validate_exports.py --help` - Data quality validation
-- `scripts/compare_export_to_teams.py` - Coverage analysis
-- `scripts/snapshot_html.py --help` - HTML capture for debugging
-- `TEST_README.md` - Testing guide
-- `WARP.md` - Project documentation
+- `python validation/validate_data.py` - Data quality validation
+- `settings/INCOMING_PLAYERS_README.md` - Incoming players data format
+- `scripts/export_incoming_players.py --help` - Export incoming players to CSV
+- `docs/TEST_README.md` - Testing guide
+- `WARP.md` - Complete project documentation
 
 Last Updated: 2025-11-29

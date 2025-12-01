@@ -9,8 +9,10 @@ A comprehensive web scraper for NCAA Division 1 Women's Volleyball programs. Col
 - **Coach Information**: Extracts coaching staff names, titles, emails, and phone numbers (~85% email capture rate)
 - **Transfer Tracking**: Matches incoming and outgoing transfers across teams
 - **RPI Integration**: Fetches NCAA RPI rankings and overall records
-- **Team Analysis**: Projects 2025 rosters by position, calculates average heights, determines offense type (5-1 vs 6-2)
+- **Team Analysis**: Projects rosters by position, calculates average heights, determines offense type (5-1 vs 6-2)
 - **Robust Parsing**: Supports multiple website platforms (SIDEARM, WMT, Presto Sports, custom layouts)
+- **Year-Based URLs**: Automatically appends season year to roster/stats URLs (Aug 1 - Jul 31 cycles)
+- **Year-Based Data**: Manages incoming players data by season with automatic date-based selection
 
 ## Quick Start
 
@@ -37,14 +39,20 @@ pip install pandas requests beautifulsoup4
 ### Basic Usage
 
 ```bash
-# Run main scraper (all 347 teams)
+# Run main scraper (all 347 teams, current season auto-selected)
 python -m src.run_scraper
+
+# Scrape specific season year
+python -m src.run_scraper --year 2024
 
 # Filter to specific teams
 python -m src.run_scraper --team "Stanford University" --team "Nebraska University"
 
 # Generate team-level analysis
 python -m src.create_team_pivot_csv
+
+# Export incoming players data
+python scripts/export_incoming_players.py --year 2025
 
 # Validate data quality
 python validation/validate_data.py
@@ -70,15 +78,18 @@ vb_scraper/
 │   ├── utils.py                       # Shared utilities
 │   └── logging_utils.py               # Logging configuration
 ├── settings/               # Configuration data
-│   ├── teams.py                       # 347 D1 teams + URLs
+│   ├── teams.py                       # 347 D1 teams + base URLs
+│   ├── teams_urls.py                  # Year-based URL management
 │   ├── transfers_config.py            # Outgoing transfer list
-│   ├── incoming_players_data.py       # Incoming players by conference
+│   ├── incoming_players_data.py       # Auto year selector for incoming players
+│   ├── incoming_players_data_YYYY.py  # Year-specific incoming players
 │   ├── rpi_team_name_aliases.py       # RPI name mappings
 │   └── manual_rosters.csv             # Manual roster data
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation
 ├── validation/             # Data validation tools
 ├── scripts/                # Utility scripts
+│   └── export_incoming_players.py     # Export incoming players to CSV
 └── exports/                # Output files
 ```
 
@@ -145,6 +156,7 @@ The scraper follows a clean separation of concerns:
 - **[docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)** - Current limitations and challenges
 - **[docs/FUTURE_ENHANCEMENTS.md](docs/FUTURE_ENHANCEMENTS.md)** - Planned improvements
 - **[docs/TEST_README.md](docs/TEST_README.md)** - Testing documentation
+- **[settings/INCOMING_PLAYERS_README.md](settings/INCOMING_PLAYERS_README.md)** - Incoming players data management
 
 ## Testing
 
@@ -183,11 +195,14 @@ Edit `settings/transfers_config.py`:
 
 ### Adding Incoming Players
 
-Edit `settings/incoming_players_data.py`:
+Edit the appropriate year file (e.g., `settings/incoming_players_data_2025.py`):
 ```
 Conference Name:
 Player Name - School Name - Position (Club)
 ```
+
+The system automatically selects the correct year based on the date (Aug 1 - Jul 31 cycle).
+See `settings/INCOMING_PLAYERS_README.md` for details.
 
 ### Manual Rosters
 

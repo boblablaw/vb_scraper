@@ -29,10 +29,13 @@ vb_scraper/
 │   ├── logging_utils.py
 │   └── utils.py
 ├── settings/               # Configuration data
-│   ├── teams.py
+│   ├── teams_urls.py
 │   ├── transfers_config.py
 │   ├── rpi_team_name_aliases.py
 │   ├── incoming_players_data.py
+│   ├── incoming_players_data_2025.py
+│   ├── incoming_players_data_2026.py
+│   ├── INCOMING_PLAYERS_README.md
 │   └── manual_rosters.csv
 ├── tests/                  # Test suite
 │   ├── test_settings.py
@@ -41,7 +44,8 @@ vb_scraper/
 │   ├── validate_data.py
 │   └── reports/
 ├── scripts/                # Utility scripts
-│   └── find_missing_urls*.py
+│   ├── find_missing_urls*.py
+│   └── export_incoming_players.py
 ├── docs/                   # Documentation
 │   ├── PROJECT_SUMMARY.md
 │   ├── KNOWN_LIMITATIONS.md
@@ -61,11 +65,17 @@ source venv/bin/activate
 # 1. Run the main scraper (generates per-player data with stats)
 python -m src.run_scraper
 
+# Optional: Specify year (auto-detects if not provided)
+python -m src.run_scraper --year 2025
+
 # Optional: Filter to specific teams
 python -m src.run_scraper --team "Brigham Young University" --team "Stanford University"
 
 # Optional: Use custom output filename
 python -m src.run_scraper --output my_custom_rosters_2025
+
+# Export incoming players data to CSV
+python scripts/export_incoming_players.py --year 2026 --output exports/incoming_players_2026.csv
 
 # 2. (Optional) Merge manual roster data for JavaScript-rendered sites
 python -m src.merge_manual_rosters
@@ -116,7 +126,10 @@ All outputs are written to the `exports/` directory:
 │ 1. SCRAPING PHASE                                                       │
 └─────────────────────────────────────────────────────────────────────────┘
 
-settings/teams.py (347 D1 teams + URLs)
+settings/teams_urls.py (347 D1 teams + year-based URLs)
+    ├─ get_season_year() (auto-detect season year from date)
+    ├─ append_year_to_url() (append /YYYY to roster/stats URLs)
+    └─ get_teams_with_year_urls() (return teams with year-appended URLs)
     ↓
 src/run_scraper.py (orchestrator)
     ├─ rpi_lookup.py (fetch RPI rankings)
@@ -158,7 +171,8 @@ src/create_team_pivot_csv.py (team-level analysis)
     ├─ Read scraped roster CSV
     ├─ Calculate positional flags from position codes
     ├─ Determine returning vs graduating players
-    ├─ Match incoming players (from incoming_players_data.py)
+    ├─ Match incoming players (from incoming_players_data.py with year-based selection)
+    │   └─ Date logic: Aug 1 - Jul 31 cycles (Dec 2025 → uses 2026 data)
     ├─ Match transfers (from OUTGOING_TRANSFERS)
     ├─ Scrape coach information (emails, phones)
     ├─ Calculate projected 2025 rosters by position
@@ -211,15 +225,29 @@ validation/reports/problem_teams_*.txt
 
 **`transfers.py`** — Matches players against transfer lists (`OUTGOING_TRANSFERS` and `INCOMING_PLAYERS`) to flag incoming/outgoing transfers.
 
-**`incoming_players.py`** — Large hardcoded list of incoming players (freshmen and transfers) with their destination schools and positions. Parsed from raw text block.
+**`settings/teams_urls.py`** — Year-based URL management module. Automatically appends season year to roster and stats URLs:
+- `get_season_year()` — Returns season year based on current date (Aug 1 - Jul 31 cycles)
+- `append_year_to_url(url, year)` — Safely appends `/YYYY` to URLs (prevents duplicate year appending)
+- `get_teams_with_year_urls(year=None)` — Returns teams list with year-appended URLs
+- Date logic: If month >= August, use current year; else use previous year (season in progress)
+- Example: Dec 2025 → uses `/2025` in URLs
+
+**`settings/incoming_players_data.py`** — Automatic year selector for incoming players data. Routes to appropriate year-specific data file:
+- Date logic: If month >= August, use next year's data; else use current year
+- Example: Dec 2025 → uses `incoming_players_data_2026.py`
+- Fallback: If year-specific file doesn't exist, returns empty list
+
+**`settings/incoming_players_data_YYYY.py`** — Year-specific incoming players data (freshmen and transfers) with destination schools and positions. Parsed from raw text block organized by conference. See `settings/INCOMING_PLAYERS_README.md` for format details.
 
 **`rpi_lookup.py`** — Fetches RPI rankings and overall records from external source, builds lookup by normalized school name.
 
 **`settings/`** — Configuration directory containing:
-- `teams.py` — Master list of D1 teams with roster URLs, stats URLs, and conference affiliations
+- `teams_urls.py` — Master list of D1 teams with base URLs and year-based URL generation logic
 - `transfers_config.py` — Hardcoded list of outgoing transfers
 - `rpi_team_name_aliases.py` — Maps official team names to RPI names when they differ (e.g., "University at Albany" → "Albany")
-- `incoming_players_data.py` — Raw text data of incoming players (freshmen and transfers) by conference
+- `incoming_players_data.py` — Automatic year selector that routes to appropriate year-specific data file
+- `incoming_players_data_YYYY.py` — Year-specific raw text data of incoming players (freshmen and transfers) by conference
+- `INCOMING_PLAYERS_README.md` — Documentation for incoming players data format and maintenance
 - `manual_rosters.csv` — Manually-entered roster data for JavaScript-rendered sites that can't be scraped
 
 **`src/merge_manual_rosters.py`** — Manual roster merge script. For teams with JavaScript-rendered rosters:
@@ -239,6 +267,12 @@ validation/reports/problem_teams_*.txt
 - Outputs team-level summaries with all analysis
 
 **`src/create_transfers_csv.py`** — Transfer data export utility. Exports `OUTGOING_TRANSFERS` from `settings/transfers_config.py` to CSV format
+
+**`scripts/export_incoming_players.py`** — CLI utility for exporting incoming players data to CSV:
+- `--year YYYY` — Specify which year's data to export (required)
+- `--output FILE` — Specify output path (default: `exports/incoming_players_YYYY.csv`)
+- `--list` — List available years instead of exporting
+- Usage: `python scripts/export_incoming_players.py --year 2026`
 
 **`validation/validate_data.py`** — Data quality validation script. Analyzes scraped data for:
 - Missing or invalid field values (position, height, class)
@@ -296,11 +330,17 @@ validation/reports/problem_teams_*.txt
 - Analysis: `offense_type`
 - Coach fields: `coach1_name`, `coach1_title`, `coach1_email`, `coach1_phone`, etc. (up to coach5)
 
-**TEAMS list** (in `teams.py`): Each entry has:
+**TEAMS list** (in `teams_urls.py`): Each entry has:
 - `team`: Official school name
 - `conference`: Conference name
-- `url`: Roster page URL
-- `stats_url`: Statistics page URL
+- `url`: Base roster page URL (year will be appended automatically)
+- `stats_url`: Base statistics page URL (year will be appended automatically)
+
+Year-based URL logic:
+- URLs are automatically modified to include season year (e.g., `/roster/2025`)
+- Season year is determined by date: Aug 1 - Jul 31 cycles
+- Example: `https://example.com/roster` → `https://example.com/roster/2025`
+- Prevents duplicate year appending if URL already contains year
 
 ### Roster HTML Parsing Quirks
 
@@ -325,17 +365,22 @@ Transfers and incoming players are matched by:
 3. For transfers: match name + old_team (outgoing) or name + new_team (incoming)
 4. For incoming players: match name + destination school
 
-Incoming players are hardcoded in `incoming_players.py` (parsed from a raw text block with conference headers). Update this file to add new incoming players.
+Incoming players are organized by year in `settings/incoming_players_data_YYYY.py` files. The system automatically selects the correct year based on date:
+- **Date Logic**: If month >= August, use next year's data; else use current year
+- **Example**: December 2025 → uses `incoming_players_data_2026.py` (recruiting for 2026 season)
+- Update the appropriate year file to add new incoming players
+- See `settings/INCOMING_PLAYERS_README.md` for detailed format and maintenance instructions
 
 ### Configuration Updates
 
-**Adding a new team**: Add an entry to `TEAMS` list in `settings/teams.py` with team name, conference, roster URL, and stats URL.
+**Adding a new team**: Add an entry to `TEAMS` list in `settings/teams_urls.py` with team name, conference, base roster URL, and base stats URL. The system will automatically append the season year to URLs.
 
-**Adding incoming players**: Edit the `RAW_INCOMING_TEXT` block in `settings/incoming_players_data.py`. Format:
+**Adding incoming players**: Edit the appropriate year-specific file (e.g., `settings/incoming_players_data_2026.py`). Format:
 ```
 Conference Name:
 Player Name - School Name - Position (Club)
 ```
+See `settings/INCOMING_PLAYERS_README.md` for detailed instructions. Use `scripts/export_incoming_players.py` to verify data after editing.
 
 **Adding outgoing transfers**: Edit `OUTGOING_TRANSFERS` list in `settings/transfers_config.py`. Format:
 ```python

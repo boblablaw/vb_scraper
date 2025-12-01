@@ -167,28 +167,26 @@ Even for successfully scraped teams, be aware of:
 
 ### Recommended Schedule
 - **Weekly**: Check `exports/scraper.log` for new failures
-- **Monthly**: Run `scripts/compare_export_to_teams.py` to track coverage
-- **Quarterly**: Full validation with `scripts/validate_exports.py --full`
-- **Annually**: Review URLs for domain changes
+- **Quarterly**: Full validation with `python validation/validate_data.py`
+- **Annually**: Review URLs in `settings/teams_urls.py` for domain changes
 
 ### Early Warning Signs
 ```bash
 # Check for new parsing failures
 grep "No players parsed" exports/scraper.log | wc -l
 
-# Compare current vs. expected coverage
-python scripts/compare_export_to_teams.py
+# Run data quality validation
+python validation/validate_data.py
 
 # Look for HTTP errors
 grep -E "(404|500|SSL)" exports/scraper.log
 ```
 
 ### When Sites Change
-1. Capture new HTML: `python scripts/snapshot_html.py --team "School Name"`
-2. Analyze structure: `python -c "from bs4 import BeautifulSoup; ..."`
-3. Update parser or URL in `settings/teams.py`
-4. Test: `python run_scraper.py --team "School Name"`
-5. Validate: Check `exports/scraper.log`
+1. Update URL in `settings/teams_urls.py` (base URL without year)
+2. Test: `python -m src.run_scraper --team "School Name"`
+3. Validate: Check `exports/scraper.log`
+4. If parser needs updating, analyze structure and update `scraper/roster.py`
 
 ---
 
