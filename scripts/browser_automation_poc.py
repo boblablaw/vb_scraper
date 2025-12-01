@@ -198,11 +198,14 @@ def scrape_lsu_stats(driver, year=2025):
     
     try:
         # Wait for stats table to load
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 15)
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".advanced-table__table")))
         print("Found stats table: .advanced-table__table")
         
-        time.sleep(2)
+        # Wait for table to be populated
+        wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, ".advanced-table__table tbody tr")) > 0)
+        
+        time.sleep(3)
         
         # Find stats tables with the specific class
         tables = driver.find_elements(By.CSS_SELECTOR, ".advanced-table__table")
@@ -212,31 +215,45 @@ def scrape_lsu_stats(driver, year=2025):
         
         for idx, table in enumerate(tables):
             try:
-                print(f"\nTable {idx + 1}:")
-                print(f"  Rows: {len(table.find_elements(By.TAG_NAME, 'tr'))}")
+                rows_count = len(table.find_elements(By.TAG_NAME, 'tr'))
+                print(f"\nTable {idx + 1}: {rows_count} rows")
                 
-                # Get headers
+                # Get headers - use innerText for DataTables compatibility
                 headers = []
-                header_row = table.find_element(By.TAG_NAME, "thead")
-                header_cells = header_row.find_elements(By.TAG_NAME, "th")
-                headers = [cell.text.strip() for cell in header_cells]
-                print(f"  Headers: {headers[:10]}")  # Show first 10 headers
+                try:
+                    header_row = table.find_element(By.TAG_NAME, "thead")
+                    header_cells = header_row.find_elements(By.TAG_NAME, "th")
+                    headers = [cell.get_attribute('innerText').strip() if cell.get_attribute('innerText') else cell.text.strip() for cell in header_cells]
+                    print(f"  Headers: {headers[:10]}")  # Show first 10 headers
+                except Exception as e:
+                    print(f"  Warning: Could not extract headers: {e}")
+                    continue
                 
                 # Get data rows
                 tbody = table.find_element(By.TAG_NAME, "tbody")
                 rows = tbody.find_elements(By.TAG_NAME, "tr")
                 
-                for row in rows:
+                print(f"  Processing {len(rows)} data rows...")
+                
+                for row_idx, row in enumerate(rows):
                     cells = row.find_elements(By.TAG_NAME, "td")
                     if cells:
+                        # Use innerText instead of text for DataTables compatibility
                         row_data = {
-                            headers[i]: cells[i].text.strip() 
+                            headers[i]: cells[i].get_attribute('innerText').strip() if cells[i].get_attribute('innerText') else ''
                             for i in range(min(len(headers), len(cells)))
                         }
+                        
+                        # Debug first few rows
+                        if row_idx < 2:
+                            print(f"    Row {row_idx} sample: {list(row_data.items())[:3]}")
+                        
                         stats.append(row_data)
                 
+                print(f"  Extracted {len(rows)} stat rows from table {idx + 1}")
+                
             except Exception as e:
-                print(f"  Error parsing table: {e}")
+                print(f"  Error parsing table {idx + 1}: {e}")
                 continue
         
         return stats
