@@ -4,7 +4,11 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a web scraper for Division 1 Women's Volleyball programs. It collects roster data, player statistics, coach information, incoming transfers, and RPI rankings from NCAA D1 volleyball team websites, then aggregates them into CSV/TSV exports for analysis.
+This is a web scraper for Division 1 Women's Volleyball programs. It collects roster data, player statistics, coach information, incoming transfers, and RPI rankings from NCAA D1 volleyball team websites, then aggregates them into CSV exports for analysis.
+
+**Architecture:** The scraper follows a clean separation of concerns:
+- **Data Collection** (`run_scraper.py` + `scraper/`): Collects raw roster and stats data
+- **Analysis** (`create_team_pivot_csv.py`): Performs all analytical work (projections, transfers, coaches)
 
 ## Common Commands
 
@@ -14,21 +18,25 @@ This is a web scraper for Division 1 Women's Volleyball programs. It collects ro
 # Activate virtual environment
 source venv/bin/activate
 
-# 1. Run the main scraper (generates per-player data)
+# 1. Run the main scraper (generates per-player data with stats)
 python run_scraper.py
 
 # Optional: Filter to specific teams
 python run_scraper.py --team "Brigham Young University" --team "Stanford University"
 
+# Optional: Use custom output filename
+python run_scraper.py --output my_custom_rosters_2025
+
 # 2. (Optional) Merge manual roster data for JavaScript-rendered sites
 python merge_manual_rosters.py
 
-# 3. Generate post-processing exports
-python create_team_pivot_csv.py    # Team-level aggregated data
-python create_display_csv.py        # Simplified display version
-python create_transfers_csv.py      # Transfer data export
+# 3. Generate team-level analysis and aggregations
+python create_team_pivot_csv.py
 
-# 4. (Optional) Validate data quality
+# 4. (Optional) Export transfer data separately
+python create_transfers_csv.py
+
+# 5. (Optional) Validate data quality
 python validation/validate_data.py
 ```
 
@@ -50,9 +58,8 @@ pip install pandas requests beautifulsoup4
 All outputs are written to the `exports/` directory:
 
 ### Main Exports
-- `d1_rosters_2026_with_stats_and_incoming.csv` / `.tsv` — Per-player data (main output)
-- `d1_team_pivot_2026.csv` / `.tsv` — Aggregated team-level data
-- `d1_display_2026.csv` / `.tsv` — Simplified display version with abbreviated stat names
+- `d1_rosters_2025_with_stats_and_incoming.csv` — Per-player data with abbreviated stat columns (Team, Conference, Rank, Record, Name, Position, Class, Height, MS, MP, SP, PTS, PTS/S, K, K/S, AE, TA, HIT%, A, A/S, SA, SA/S, SE, D, D/S, RE, TRE, Rec%, BS, BA, TB, B/S, BHE)
+- `d1_team_pivot_2025.csv` — Team-level aggregated data with positional analysis, transfers, coaches, and projected rosters
 - `outgoing_transfers.csv` — Exported transfer data
 
 ### Logs & Validation
@@ -74,21 +81,20 @@ settings/teams.py (347 D1 teams + URLs)
 run_scraper.py (orchestrator)
     ├─ rpi_lookup.py (fetch RPI rankings)
     └─ For each team:
-        team_analysis.py
+        team_analysis.py (SIMPLIFIED - data collection only)
             ├─ roster.py (parse HTML → name/position/class/height)
             │   ├─ SIDEARM card/table layouts
+            │   ├─ WMT reference-based JSON
             │   ├─ Drupal Views roster
-            │   ├─ Embedded JSON roster
             │   ├─ Generic table fallback
             │   └─ Data cleaners (strip heights from positions, club names from class)
-            ├─ stats.py (parse stats tables → kills/assists/digs/etc.)
-            ├─ coaches.py (extract coach info)
-            ├─ transfers.py (match vs. settings/transfers_config.py)
-            ├─ incoming_players.py (match vs. settings/incoming_players_data.py)
+            ├─ stats.py (parse stats tables → all player stats)
+            │   ├─ Merges offensive + defensive stats
+            │   ├─ Normalizes column names
+            │   └─ Calculates derived stats (D/S, Rec%)
             └─ Position/class normalization (utils.py)
     ↓
-exports/d1_rosters_2026_with_stats_and_incoming.tsv (raw export)
-exports/d1_rosters_2026_with_stats_and_incoming.csv
+exports/d1_rosters_2025_with_stats_and_incoming.csv
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 2. MANUAL ROSTER MERGE (optional, for JS-rendered sites)               │
@@ -97,35 +103,30 @@ exports/d1_rosters_2026_with_stats_and_incoming.csv
 settings/manual_rosters.csv (manually entered data)
     ↓
 merge_manual_rosters.py
-    ├─ Load scraped TSV
+    ├─ Load scraped CSV
     ├─ Remove teams with manual data from scraped results
-    ├─ Add manual roster entries (with position flags auto-detected)
-    └─ Write merged data back to TSV
+    ├─ Add manual roster entries
+    └─ Write merged data back to CSV
     ↓
-exports/d1_rosters_2026_with_stats_and_incoming.tsv (updated)
+exports/d1_rosters_2025_with_stats_and_incoming.csv (updated)
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 3. POST-PROCESSING & EXPORTS                                            │
 └─────────────────────────────────────────────────────────────────────────┘
 
-create_team_pivot_csv.py (aggregate by team)
-    ├─ Read full roster TSV
-    ├─ Aggregate position counts (returning/incoming/projected 2026)
+create_team_pivot_csv.py (team-level analysis)
+    ├─ Read scraped roster CSV
+    ├─ Calculate positional flags from position codes
+    ├─ Determine returning vs graduating players
+    ├─ Match incoming players (from incoming_players_data.py)
+    ├─ Match transfers (from OUTGOING_TRANSFERS)
+    ├─ Scrape coach information (emails, phones)
+    ├─ Calculate projected 2025 rosters by position
     ├─ Calculate average heights by position
-    ├─ List transfers and top performers
+    ├─ Determine offense type (5-1 vs 6-2 based on assists)
     └─ Group by team
     ↓
-exports/d1_team_pivot_2026.tsv
-exports/d1_team_pivot_2026.csv
-
-create_display_csv.py (simplified stats view)
-    ├─ Read full roster TSV
-    ├─ Extract essential columns only
-    ├─ Abbreviate stat names (K, A, D, MP, SP, etc.)
-    └─ Unprotect Excel formatting
-    ↓
-exports/d1_display_2026.tsv
-exports/d1_display_2026.csv
+exports/d1_team_pivot_2025.csv
 
 create_transfers_csv.py
     └─ Export settings/transfers_config.py to CSV
@@ -137,27 +138,26 @@ exports/outgoing_transfers.csv
 └─────────────────────────────────────────────────────────────────────────┘
 
 validation/validate_data.py
-    ├─ Read exports/d1_rosters_2026_with_stats_and_incoming.tsv
+    ├─ Read exports/d1_rosters_2025_with_stats_and_incoming.csv
     ├─ Check data quality (missing fields, invalid formats, normalization failures)
     ├─ Detect suspected non-players
     └─ Identify problem teams
     ↓
-validation/validation/validation_report_*.md
-validation/validation/problem_teams_*.txt
+validation/validation_report_*.md
+validation/problem_teams_*.txt
 ```
 
 ### Core Modules
 
-**`run_scraper.py`** — Main entry point. Iterates through all teams in `TEAMS`, calls `analyze_team()` for each, aggregates results, writes CSV/TSV with friendly column headers.
+**`run_scraper.py`** — Main entry point. Iterates through all teams in `TEAMS`, calls `analyze_team()` for each, aggregates results, writes CSV with abbreviated column headers. Also calculates derived stats (D/S, Rec%) when not provided by source.
 
-**`team_analysis.py`** — Core team processing logic. For each team:
+**`scraper/team_analysis.py`** — Simplified data collection module (111 lines). For each team:
 - Fetches and parses roster HTML
 - Normalizes player data (name, position, class, height)
-- Determines positional flags (setter, pin hitter, middle blocker, defensive specialist)
-- Counts returning vs. graduating vs. transferring players
-- Matches incoming players from `incoming_players.py`
-- Fetches stats and coach data
-- Returns list of player dicts with all fields
+- Fetches player statistics
+- Fetches RPI data
+- Returns simplified player dicts with roster + stats only
+- **Does NOT** perform any analysis, projections, or coach scraping
 
 **`roster.py`** — HTML parsing for rosters. Supports multiple layouts:
 - SIDEARM card-based rosters
@@ -167,7 +167,7 @@ validation/validation/problem_teams_*.txt
 
 **`stats.py`** — Parses player statistics from HTML tables using pandas. Handles SIDEARM NextGen offensive/defensive stat tables and generic table formats. Normalizes column names (e.g., `K` → `kills`, `A` → `assists`).
 
-**`coaches.py`** — Extracts coaching staff info (name, title, email, phone). Looks for dedicated coaching staff pages or parses from roster pages.
+**`scraper/coaches.py`** — Extracts coaching staff info (name, title, email, phone). Looks for dedicated coaching staff pages or tries common URL patterns (/coaches, /staff) when no link exists. Achieves ~85% email capture rate.
 
 **`transfers.py`** — Matches players against transfer lists (`OUTGOING_TRANSFERS` and `INCOMING_PLAYERS`) to flag incoming/outgoing transfers.
 
@@ -188,16 +188,15 @@ validation/validation/problem_teams_*.txt
 - Adds manual roster rows with auto-detected position flags
 - Writes merged data back to main export TSV
 
-**`create_team_pivot_csv.py`** — Team-level aggregation script. Reads the per-player TSV, aggregates by team, calculates:
-- Position counts (returning/incoming/projected for 2026)
-- Average heights by position
-- Transfer lists
-- Top performers (kills, assists, digs)
-
-**`create_display_csv.py`** — Simplified export generator. Creates a clean display version:
-- Extracts only essential columns (name, position, class, height, key stats)
-- Abbreviates stat column names (K, A, D, MP, SP, etc.)
-- Removes Excel protection formatting for easier viewing
+**`create_team_pivot_csv.py`** — Team-level analysis script (414 lines). Reads the per-player CSV, performs all analytical work:
+- Calculates positional flags from position codes (S, OH, RS, MB, DS)
+- Determines returning vs graduating players from class years
+- Matches incoming players and transfers
+- Scrapes coach information (name, title, email, phone)
+- Calculates projected 2025 roster by position
+- Calculates average heights by position
+- Determines offense type (5-1 vs 6-2 based on assists >= 350)
+- Outputs team-level summaries with all analysis
 
 **`create_transfers_csv.py`** — Transfer data export utility. Exports `OUTGOING_TRANSFERS` from `settings/transfers_config.py` to CSV format
 
@@ -249,11 +248,15 @@ validation/validation/problem_teams_*.txt
 ### Important Data Structures
 
 **Player dict** (from `team_analysis.py`):
-- Core fields: `name`, `position`, `class`, `height`, `team`, `conference`
-- Boolean flags: `is_setter`, `is_pin_hitter`, `is_middle_blocker`, `is_def_specialist`, `is_graduating`, `is_outgoing_transfer`, `is_incoming_transfer`
-- Stats fields: `kills`, `assists`, `digs`, `hitting_pct`, `blocks_per_set`, etc.
-- Projected 2026 counts: `returning_setter_count_2026`, `incoming_setter_count_2026`, `projected_setter_count_2026` (same for pins, middles, defs)
-- Projected 2026 name lists: `returning_setter_names_2026`, `incoming_setter_names_2026`, etc.
+- Core fields: `team`, `conference`, `rank`, `record`, `name`, `position`, `class`, `height`
+- Stats fields: All player stats with abbreviated names (MS, MP, SP, PTS, PTS/S, K, K/S, AE, TA, HIT%, A, A/S, SA, SA/S, SE, D, D/S, RE, TRE, Rec%, BS, BA, TB, B/S, BHE)
+- Note: No boolean flags, no projections, no coach data in scraper output
+
+**Team pivot dict** (from `create_team_pivot_csv.py`):
+- Core fields: `team`, `conference`, `rank`, `record`, `roster_url`, `stats_url`
+- Position analysis: `returning_setter_count`, `returning_setter_names`, `incoming_setter_count`, `incoming_setter_names`, `projected_setter_count`, `avg_setter_height` (same for pins, middles, defs)
+- Transfers: `outgoing_transfers`, `incoming_transfers`
+- Analysis: `offense_type`
 - Coach fields: `coach1_name`, `coach1_title`, `coach1_email`, `coach1_phone`, etc. (up to coach5)
 
 **TEAMS list** (in `teams.py`): Each entry has:
