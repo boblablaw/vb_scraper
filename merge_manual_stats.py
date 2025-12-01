@@ -32,6 +32,14 @@ TEAM_NAME_MAP = {
     "northern_colorado": "University of Northern Colorado",
     "northern colorado": "University of Northern Colorado",
     "denver": "University of Denver",
+    "furman_university": "Furman University",
+    "furman university": "Furman University",
+    "east_texas_a&m_university": "East Texas A&M University",
+    "east texas a&m university": "East Texas A&M University",
+    "gonzaga_university": "Gonzaga University",
+    "gonzaga university": "Gonzaga University",
+    "jackson_state_university": "Jackson State University",
+    "jackson state university": "Jackson State University",
     # Add more mappings as needed
 }
 
