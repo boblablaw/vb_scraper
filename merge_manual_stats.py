@@ -26,21 +26,10 @@ STATS_DIR = "stats"
 MAIN_EXPORT = "exports/d1_rosters_2026_with_stats_and_incoming.csv"
 
 # Map file name prefixes to official team names
+# Note: Auto-matching using normalize_school_key is attempted first
+# Only add explicit mappings here if auto-matching fails
 TEAM_NAME_MAP = {
-    "coastal_carolina": "Coastal Carolina University",
-    "coastal carolina": "Coastal Carolina University",
-    "northern_colorado": "University of Northern Colorado",
-    "northern colorado": "University of Northern Colorado",
-    "denver": "University of Denver",
-    "furman_university": "Furman University",
-    "furman university": "Furman University",
-    "east_texas_a&m_university": "East Texas A&M University",
-    "east texas a&m university": "East Texas A&M University",
-    "gonzaga_university": "Gonzaga University",
-    "gonzaga university": "Gonzaga University",
-    "jackson_state_university": "Jackson State University",
-    "jackson state university": "Jackson State University",
-    # Add more mappings as needed
+    # Add explicit overrides here if needed
 }
 
 
@@ -257,11 +246,36 @@ def main():
         print(f"  - {f.name}")
     print()
     
+    # Load team list for intelligent matching
+    from settings.teams import TEAMS
+    all_team_names = [t['team'] for t in TEAMS]
+    
     # Group files by team
     team_files = {}
     for filepath in stats_files:
         team_id = extract_team_from_filename(filepath.name)
-        team_name = TEAM_NAME_MAP.get(team_id, team_id)
+        
+        # First check explicit mapping
+        if team_id in TEAM_NAME_MAP:
+            team_name = TEAM_NAME_MAP[team_id]
+        else:
+            # Try intelligent matching using normalize_school_key
+            team_id_normalized = normalize_school_key(team_id)
+            
+            # Find best match in team list
+            best_match = None
+            for candidate in all_team_names:
+                if normalize_school_key(candidate) == team_id_normalized:
+                    best_match = candidate
+                    break
+            
+            if best_match:
+                team_name = best_match
+                print(f"Auto-matched: '{team_id}' -> '{best_match}'")
+            else:
+                # No match found, use original (will likely fail to match players)
+                team_name = team_id
+                print(f"Warning: No match found for '{team_id}' - add to TEAM_NAME_MAP if needed")
         
         if team_name not in team_files:
             team_files[team_name] = []
