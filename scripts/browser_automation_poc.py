@@ -49,6 +49,36 @@ def setup_driver(headless=True):
     return driver
 
 
+def dismiss_cookie_popup(driver):
+    """Try to dismiss cookie consent popup if present."""
+    try:
+        # Common cookie popup button selectors
+        cookie_selectors = [
+            "button[id*='accept']",
+            "button[id*='consent']",
+            "button.accept",
+            "a.accept",
+            "#onetrust-accept-btn-handler",
+            "button.css-47sehv",  # Common CSS class for accept buttons
+        ]
+        
+        for selector in cookie_selectors:
+            try:
+                button = WebDriverWait(driver, 2).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                )
+                button.click()
+                print("✓ Dismissed cookie popup")
+                time.sleep(1)
+                return True
+            except:
+                continue
+        
+        return False
+    except Exception as e:
+        return False
+
+
 def scrape_lsu_roster(driver, year=2025):
     """
     Scrape roster data from LSU volleyball roster page.
@@ -56,85 +86,63 @@ def scrape_lsu_roster(driver, year=2025):
     Returns:
         list: Player dictionaries with name, position, class, height
     """
-    url = f"https://lsusports.net/sports/womens-volleyball/roster/{year}"
+    url = "https://lsusports.net/sports/vb/roster/"
     print(f"Fetching roster from: {url}")
     
     driver.get(url)
     
+    # Dismiss cookie popup if present
+    dismiss_cookie_popup(driver)
+    
     # Wait for roster content to load
     try:
-        # Try multiple possible selectors
         wait = WebDriverWait(driver, 10)
         
-        # Common SIDEARM roster selectors
-        selectors_to_try = [
-            ".sidearm-roster-players",
-            ".sidearm-roster-player",
-            ".roster-card",
-            "[class*='roster']",
-        ]
-        
-        for selector in selectors_to_try:
-            try:
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
-                print(f"Found roster content with selector: {selector}")
-                break
-            except:
-                continue
+        # Wait for the players-table to be present
+        wait.until(EC.presence_of_element_located((By.ID, "players-table")))
+        print("Found roster table: #players-table")
         
         # Additional wait for JavaScript to finish rendering
         time.sleep(2)
         
         players = []
         
-        # Try to find roster cards/items
-        roster_items = driver.find_elements(By.CSS_SELECTOR, ".sidearm-roster-player")
+        # Find the players table
+        table = driver.find_element(By.ID, "players-table")
         
-        if not roster_items:
-            # Fallback: try other common patterns
-            roster_items = driver.find_elements(By.CSS_SELECTOR, "[class*='roster-card']")
+        # Get table rows
+        tbody = table.find_element(By.TAG_NAME, "tbody")
+        rows = tbody.find_elements(By.TAG_NAME, "tr")
         
-        print(f"Found {len(roster_items)} roster items")
+        print(f"Found {len(rows)} roster rows")
         
-        for item in roster_items:
+        for row in rows:
             try:
+                cells = row.find_elements(By.TAG_NAME, "td")
+                if not cells:
+                    continue
+                
                 player = {}
                 
-                # Extract name
-                name_elem = item.find_element(By.CSS_SELECTOR, ".sidearm-roster-player-name, h3, .name")
-                player["name"] = name_elem.text.strip()
+                # Try to extract data from cells
+                # Typical table structure: [#, Name, Position, Height, Class, Hometown]
+                if len(cells) >= 3:
+                    # Skip first cell (jersey number)
+                    player["name"] = cells[1].text.strip() if len(cells) > 1 else ""
+                    player["position"] = cells[2].text.strip() if len(cells) > 2 else ""
+                    player["height"] = cells[3].text.strip() if len(cells) > 3 else ""
+                    player["class"] = cells[4].text.strip() if len(cells) > 4 else ""
                 
-                # Extract position
-                try:
-                    pos_elem = item.find_element(By.CSS_SELECTOR, ".sidearm-roster-player-position, .position")
-                    player["position"] = pos_elem.text.strip()
-                except:
-                    player["position"] = ""
-                
-                # Extract class year
-                try:
-                    class_elem = item.find_element(By.CSS_SELECTOR, ".sidearm-roster-player-academic-year, .year, .class")
-                    player["class"] = class_elem.text.strip()
-                except:
-                    player["class"] = ""
-                
-                # Extract height
-                try:
-                    height_elem = item.find_element(By.CSS_SELECTOR, ".sidearm-roster-player-height, .height")
-                    player["height"] = height_elem.text.strip()
-                except:
-                    player["height"] = ""
-                
-                if player["name"]:
+                if player.get("name"):
                     players.append(player)
                     
             except Exception as e:
-                print(f"Error parsing roster item: {e}")
+                print(f"Error parsing roster row: {e}")
                 continue
         
-        # If structured approach fails, dump page source for analysis
+        # If no players found, dump page source for analysis
         if not players:
-            print("\nNo players found with standard selectors.")
+            print("\nNo players found in table.")
             print("Dumping page source snippet for analysis:\n")
             page_source = driver.page_source
             print(page_source[:2000])
@@ -156,21 +164,25 @@ def scrape_lsu_stats(driver, year=2025):
     Returns:
         list: Player stat dictionaries
     """
-    url = f"https://lsusports.net/sports/womens-volleyball/stats/{year}"
+    url = f"https://lsusports.net/sports/vb/cumestats/"
     print(f"\nFetching stats from: {url}")
     
     driver.get(url)
     
+    # Dismiss cookie popup if present
+    dismiss_cookie_popup(driver)
+    
     try:
         # Wait for stats table to load
         wait = WebDriverWait(driver, 10)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table, .stats-table")))
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".advanced-table__table")))
+        print("Found stats table: .advanced-table__table")
         
         time.sleep(2)
         
-        # Try to find stats tables
-        tables = driver.find_elements(By.TAG_NAME, "table")
-        print(f"Found {len(tables)} tables on stats page")
+        # Find stats tables with the specific class
+        tables = driver.find_elements(By.CSS_SELECTOR, ".advanced-table__table")
+        print(f"Found {len(tables)} stats table(s)")
         
         stats = []
         
@@ -259,7 +271,10 @@ def analyze_page_structure(driver, url):
             print(f"  Script {idx} contains roster/player data (length: {len(content)})")
     
     # Save full page source for detailed analysis
-    output_file = f"exports/page_source_{url.split('/')[-2]}.html"
+    # Extract a meaningful name from URL
+    url_parts = [p for p in url.rstrip('/').split('/') if p]
+    page_name = url_parts[-1] if url_parts else "page"
+    output_file = f"exports/page_source_{page_name}.html"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(driver.page_source)
     print(f"\nFull page source saved to: {output_file}")
@@ -276,8 +291,8 @@ def main():
         driver = setup_driver(headless=False)  # Set to False to see browser
         print("✓ Driver ready\n")
         
-        # Analyze page structure first
-        analyze_page_structure(driver, "https://lsusports.net/sports/womens-volleyball/roster/2025")
+        # Analyze roster page structure first
+        analyze_page_structure(driver, "https://lsusports.net/sports/vb/roster/")
         
         # Scrape roster
         print("\n" + "="*60)
@@ -295,6 +310,9 @@ def main():
             print("\n✓ Roster saved to exports/lsu_roster_browser.json")
         else:
             print("\n✗ No roster data found")
+        
+        # Analyze stats page structure
+        analyze_page_structure(driver, "https://lsusports.net/sports/vb/cumestats/")
         
         # Scrape stats
         print("\n" + "="*60)
