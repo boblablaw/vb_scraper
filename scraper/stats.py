@@ -337,6 +337,10 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                 suffixes=("", "_def"),
             )
             logger.info("Merged offensive + defensive stats tables on 'player'.")
+            
+            # Rename total_attacks_def to total_reception_attempts (TA in defensive stats = reception attempts)
+            if "total_attacks_def" in merged_df.columns:
+                merged_df = merged_df.rename(columns={"total_attacks_def": "total_reception_attempts"})
         elif off_df is not None:
             merged_df = off_df
         elif def_df is not None:

@@ -359,8 +359,8 @@ def main():
     print()
     
     # Parse command line arguments for custom paths
-    scraped_file = 'exports/d1_rosters_2026_with_stats_and_incoming.csv'
-    output_file = 'exports/d1_rosters_2026_with_stats_and_incoming.csv'
+    scraped_file = 'exports/d1_rosters_2025_with_stats_and_incoming.csv'
+    output_file = 'exports/d1_rosters_2025_with_stats_and_incoming.csv'
     
     if '--output' in sys.argv:
         idx = sys.argv.index('--output')

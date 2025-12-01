@@ -1,99 +1,110 @@
-# team_pivot_2026.py
+# create_team_pivot_csv.py
+# Reads simplified scraper output and calculates team-level aggregations
+# including positional analysis, transfers, incoming players, coaches, and offense type.
 
 import csv
 import re
 import os
-from typing import Any, Dict, List
-
-import os
-from typing import List, Dict
+from typing import Any, Dict, List, Set
 
 import pandas as pd
+
+from settings import TEAMS, OUTGOING_TRANSFERS
+from scraper.utils import (
+    normalize_school_key,
+    normalize_player_name,
+    normalize_class,
+    class_next_year,
+    is_graduating,
+    extract_position_codes,
+)
+from scraper.coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
+from scraper.utils import fetch_html
+from logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-INPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2026_with_stats_and_incoming.csv")
+INPUT_CSV = os.path.join(EXPORT_DIR, "d1_rosters_2025_with_stats_and_incoming.csv")
+OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2025.csv")
 
-OUTPUT_CSV = os.path.join(EXPORT_DIR, "d1_team_pivot_2026.csv")
 
-from settings import OUTGOING_TRANSFERS
-
-def excel_unprotect(value: Any) -> str:
+def parse_incoming_players() -> List[Dict[str, str]]:
     """
-    Convert protected Excel value ="6-2" -> 6-2.
-    If not wrapped, return as string unchanged.
+    Parse incoming players from RAW_INCOMING_TEXT.
+    Returns list of dicts with: name, school, position
     """
-    s = str(value).strip()
-    if not s:
-        return ""
-    if s.startswith('="') and s.endswith('"'):
-        return s[2:-1]
-    return s
+    from settings.incoming_players_data import RAW_INCOMING_TEXT
+    
+    players = []
+    current_conf = ""
+    
+    for line in RAW_INCOMING_TEXT.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Conference header ends with ":"
+        if line.endswith(":"):
+            current_conf = line[:-1].strip()
+            continue
+        
+        # Player line format: Name - School - Position (Club)
+        # Or: Name - School - Position
+        if " - " not in line:
+            continue
+        
+        parts = line.split(" - ")
+        if len(parts) < 3:
+            continue
+        
+        name = parts[0].strip()
+        school = parts[1].strip()
+        position = parts[2].strip()
+        
+        # Remove club info from position if present
+        if "(" in position:
+            position = position.split("(")[0].strip()
+        
+        players.append({
+            "name": normalize_player_name(name),
+            "school": school,
+            "position": position,
+        })
+    
+    return players
 
 
-def first_non_empty(series: pd.Series) -> str:
-    """
-    Return the first non-empty, non-NaN value in a Series as a string.
-    Used for team-level fields like team_rpi_rank, team_overall_record.
-    """
-    for v in series:
-        if pd.notna(v) and str(v).strip() != "":
-            return str(v)
-    return ""
+def get_team_info(team_name: str) -> Dict[str, Any]:
+    """Get team info from settings.TEAMS."""
+    team_key = normalize_school_key(team_name)
+    for t in TEAMS:
+        if normalize_school_key(t["team"]) == team_key:
+            return t
+    return {}
 
 
-def to_int_safe(val: Any) -> int:
+def height_to_inches(height_str: str) -> float:
+    """Convert '6-2' to inches (74.0)."""
+    if not height_str or height_str == "":
+        return float("nan")
+    
+    if "-" not in height_str:
+        return float("nan")
+    
     try:
-        return int(float(val))
-    except Exception:
-        return 0
-
-
-def normalize_school_key(name: str) -> str:
-    """
-    Same school-key normalizer as in main_roster_scraper:
-    lowercase, strip punctuation, remove words:
-      'university', 'college', 'of', 'the'
-    """
-    s = str(name or "").strip().lower()
-    s = re.sub(r"[^a-z0-9\s]", " ", s)
-    stop_words = {"university", "college", "of", "the"}
-    tokens = [t for t in s.split() if t and t not in stop_words]
-    return " ".join(tokens)
-
-
-def height_str_to_inches(h: str) -> float:
-    """
-    Convert '6-2' style height (optionally wrapped as ="6-2") to total inches.
-    Returns NaN if not parseable.
-    """
-    s = str(h).strip()
-    if not s:
-        return float("nan")
-
-    # Strip Excel-protection wrapper ="6-2"
-    if s.startswith('="') and s.endswith('"'):
-        s = s[2:-1].strip()
-
-    # Expect "F-I"
-    if "-" not in s:
-        return float("nan")
-    parts = s.split("-")
-    if len(parts) != 2:
-        return float("nan")
-    try:
+        parts = height_str.split("-")
         feet = int(parts[0])
         inches = int(parts[1])
         return feet * 12 + inches
-    except Exception:
+    except:
         return float("nan")
 
 
-def inches_to_height_str(inches: float) -> str:
-    """
-    Convert total inches back to "F' I\"" format (e.g. 71 -> 5' 11").
-    """
+def inches_to_height(inches: float) -> str:
+    """Convert inches to '6' 2\"' format."""
     if pd.isna(inches):
         return ""
     inches = int(round(inches))
@@ -102,571 +113,301 @@ def inches_to_height_str(inches: float) -> str:
     return f"{feet}' {rem}\""
 
 
-def lookup_player_info_by_name(df: pd.DataFrame, name: str) -> Dict[str, str]:
-    """
-    Given a player name, pull position + class_next_year or class from the
-    full dataset. Returns {} if not found.
-    """
-    name_norm = str(name).strip().lower()
-    if "name" not in df.columns:
-        return {}
-
-    subset = df[df["name"].str.lower() == name_norm]
-
-    if subset.empty:
-        return {}
-
-    row = subset.iloc[0]
-
-    pos = str(row.get("position", "")).strip()
-    cls = str(row.get("class_next_year", "")).strip()
-    if not cls:
-        cls = str(row.get("class", "")).strip()
-
-    return {
-        "position": pos,
-        "class": cls,
-    }
-
-
-# --- Same beautify + aliasing used by the main scraper for column headers ---
-
-FRIENDLY_ALIASES_INPUT = {
-    # Returning names
-    "returning_setter_names_2026": "returning_setters",
-    "returning_pin_hitter_names_2026": "returning_pins",
-    "returning_middle_blocker_names_2026": "returning_middles",
-    "returning_def_specialist_names_2026": "returning_defs",
-    # Incoming names
-    "incoming_setter_names_2026": "incoming_setters",
-    "incoming_pin_hitter_names_2026": "incoming_pins",
-    "incoming_middle_blocker_names_2026": "incoming_middles",
-    "incoming_def_specialist_names_2026": "incoming_defs",
-}
-
-
-def beautify(col: str) -> str:
-    """
-    Convert snake_case or similar to 'Title Case' without underscores,
-    and strip '2026' from the header.
-    (Matches the main scraper's behavior.)
-    """
-    base = " ".join(word.capitalize() for word in col.replace("_", " ").split())
-    base = base.replace("2026", "").strip()
-    base = " ".join(base.split())
-    return base
-
-
-def map_friendly_headers_to_internal(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    The main scraper wrote the TSV using beautified headers (and some aliases).
-    Here we map those friendly headers back to the internal snake_case names
-    this pivot script expects.
-    """
-
-    # Internal columns we actually care about reading from the TSV
-    internal_cols = set([
-        # base
-        "team",
-        "conference",
-        "team_rpi_rank",
-        "team_overall_record",
-        "name",
-        "position",
-        "class",
-        "class_next_year",
-        "height",
-
-        # flags
-        "is_setter",
-        "is_pin_hitter",
-        "is_middle_blocker",
-        "is_def_specialist",
-        "is_graduating",
-        "is_outgoing_transfer",
-        "is_incoming_transfer",
-
-        # stats
-        "assists",
-        "kills",
-        "digs",
-
-        # incoming positional name lists
-        "incoming_setter_names_2026",
-        "incoming_pin_hitter_names_2026",
-        "incoming_middle_blocker_names_2026",
-        "incoming_def_specialist_names_2026",
-
-        # counts & name lists by position (from main script)
-        "returning_setter_count_2026",
-        "returning_setter_names_2026",
-        "incoming_setter_count_2026",
-        "projected_setter_count_2026",
-
-        "returning_pin_hitter_count_2026",
-        "returning_pin_hitter_names_2026",
-        "incoming_pin_hitter_count_2026",
-        "projected_pin_hitter_count_2026",
-
-        "returning_middle_blocker_count_2026",
-        "returning_middle_blocker_names_2026",
-        "incoming_middle_blocker_count_2026",
-        "projected_middle_blocker_count_2026",
-
-        "returning_def_specialist_count_2026",
-        "returning_def_specialist_names_2026",
-        "incoming_def_specialist_count_2026",
-        "projected_def_specialist_count_2026",
-
-        # coaches
-        "coach1_name", "coach1_title", "coach1_email", "coach1_phone",
-        "coach2_name", "coach2_title", "coach2_email", "coach2_phone",
-        "coach3_name", "coach3_title", "coach3_email", "coach3_phone",
-        "coach4_name", "coach4_title", "coach4_email", "coach4_phone",
-        "coach5_name", "coach5_title", "coach5_email", "coach5_phone",
-    ])
-
-    current_cols = set(df.columns)
-
-    # For each internal name, compute what the main script would have used
-    # as the friendly header, and if that friendly header exists, rename it back.
-    rename_map: Dict[str, str] = {}
-    for internal in internal_cols:
-        alias = FRIENDLY_ALIASES_INPUT.get(internal, internal)
-        friendly = beautify(alias)
-        if friendly in current_cols and internal not in current_cols:
-            rename_map[friendly] = internal
-
-    if rename_map:
-        df = df.rename(columns=rename_map)
-
-    return df
-
-
-def build_team_pivot(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Build one-row-per-team pivot with:
-      - team + conference
-      - team_rpi_rank + team_overall_record
-      - returning players by position (names with class_next_year + stat)
-      - incoming / outgoing transfers lists (including config-only incoming)
-      - average height by position
-      - coach info (coach1–coach5 name/title/email/phone)
-    """
-
-    # Make sure key columns exist as strings
-    for col in [
-        "team",
-        "conference",
-        "team_rpi_rank",
-        "team_overall_record",
-        "name",
-        "position",
-        "class",
-        "class_next_year",
-        "height",
-        "is_setter",
-        "is_pin_hitter",
-        "is_middle_blocker",
-        "is_def_specialist",
-        "is_graduating",
-        "is_outgoing_transfer",
-        "is_incoming_transfer",
-        "assists",
-        "kills",
-        "digs",
-        # incoming-position name lists
-        "incoming_setter_names_2026",
-        "incoming_pin_hitter_names_2026",
-        "incoming_middle_blocker_names_2026",
-        "incoming_def_specialist_names_2026",
-        # coaches
-        "coach1_name", "coach1_title", "coach1_email", "coach1_phone",
-        "coach2_name", "coach2_title", "coach2_email", "coach2_phone",
-        "coach3_name", "coach3_title", "coach3_email", "coach3_phone",
-        "coach4_name", "coach4_title", "coach4_email", "coach4_phone",
-        "coach5_name", "coach5_title", "coach5_email", "coach5_phone",
-    ]:
-        if col not in df.columns:
-            df[col] = ""
-
-    # Ensure name is string for lookups
-    df["name"] = df["name"].astype(str)
-
-    # Ensure numeric-ish fields are at least strings
-    df["team_rpi_rank"] = df["team_rpi_rank"].astype(str)
-    df["team_overall_record"] = df["team_overall_record"].astype(str)
-
-    # Cast boolean-ish columns to int (0/1) safely
-    for col in [
-        "is_setter",
-        "is_pin_hitter",
-        "is_middle_blocker",
-        "is_def_specialist",
-        "is_graduating",
-        "is_outgoing_transfer",
-        "is_incoming_transfer",
-    ]:
-        df[col] = df[col].apply(to_int_safe)
-
-    # Numeric stats: assists, kills, digs
-    for col in ["assists", "kills", "digs"]:
-        df[col] = df[col].apply(to_int_safe)
-
-    # Height in inches for averaging
-    df["height_inches"] = df["height"].apply(height_str_to_inches)
-
-    teams: List[Dict[str, Any]] = []
-
-    grouped = df.groupby(["team", "conference"], dropna=False, sort=True)
-
-    for (team, conf), g in grouped:
-        g = g.copy()
-
-        # ------- Team-level fields (RPI) -------
-        rpi_rank = first_non_empty(g["team_rpi_rank"])
-        rpi_record = first_non_empty(g["team_overall_record"])
-        
-        # ------- Determine offense type (5-1 vs 6-2) based on assists -------
-        offense_type = "Unknown"
-        if "assists" in g.columns:
-            # Count setters with significant assists (>= 350)
-            setters_with_assists = g[(g["assists"] >= 350) & (g["is_setter"] == 1)]
-            num_setters_with_assists = len(setters_with_assists)
-            
-            if num_setters_with_assists >= 2:
-                offense_type = "6-2"
-            elif num_setters_with_assists == 1:
-                offense_type = "5-1"
-            # else remains "Unknown"
-
-        # Normalized key for this team (for matching transfers config)
-        team_key = normalize_school_key(team)
-
-        # Transfers from the config where this team is the DESTINATION (new_team)
-        incoming_cfg_only = []
-        for xfer in OUTGOING_TRANSFERS:
-            new_team = xfer.get("new_team", "")
-            if not new_team:
-                continue
-            if normalize_school_key(new_team) != team_key:
-                continue
-            incoming_cfg_only.append(xfer)
-
-        # ------- Masks for 2026 returning & transfers -------
-        not_grad = g["is_graduating"] == 0
-        not_xfer_out = g["is_outgoing_transfer"] == 0
-
-        # Returning = on roster, not graduating, not outgoing transfer
-        returning_mask = not_grad & not_xfer_out
-
-        # Position masks
-        ms_setter = g["is_setter"] == 1
-        ms_pin = g["is_pin_hitter"] == 1
-        ms_mb = g["is_middle_blocker"] == 1
-        ms_def = g["is_def_specialist"] == 1
-
-        # Returning players by position
-        ret_setters = g[returning_mask & ms_setter]
-        ret_pins = g[returning_mask & ms_pin]
-        ret_mbs = g[returning_mask & ms_mb]
-        ret_defs = g[returning_mask & ms_def]
-
-        # Incoming / outgoing transfers from roster flags
-        incoming_transfers = g[g["is_incoming_transfer"] == 1]
-        outgoing_transfers = g[g["is_outgoing_transfer"] == 1]
-
-        # ------- Helpers for formatted name lists -------
-
-        def format_returning_players(block: pd.DataFrame, stat_col: str) -> str:
-            """
-            "Regan Kassel - So. (592)"
-            """
-            rows = []
-            for _, row in block.iterrows():
-                name = str(row["name"]).strip()
-                cls = str(row["class_next_year"]).strip()
-                stat_val = to_int_safe(row.get(stat_col, 0))
-                # If class_next_year is empty, fall back to class
-                if not cls:
-                    cls = str(row.get("class", "")).strip()
-                if not name:
-                    continue
-                rows.append(f"{name} - {cls} ({stat_val})")
-            return ", ".join(rows)
-
-        def format_transfer_players(block: pd.DataFrame) -> str:
-            """
-            "Molly Beatty (S - So.), Grace Thomas (MB - R-Jr.)"
-            """
-            rows = []
-            for _, row in block.iterrows():
-                name = str(row["name"]).strip()
-                pos = str(row["position"]).strip()
-                cls = str(row["class_next_year"]).strip()
-                if not cls:
-                    cls = str(row.get("class", "")).strip()
-                if not name:
-                    continue
-                rows.append(f"{name} ({pos} - {cls})")
-            return ", ".join(rows)
-
-        # Setters: stat = assists
-        returning_setter_names = format_returning_players(ret_setters, "assists")
-
-        # Pins: stat = kills
-        returning_pin_names = format_returning_players(ret_pins, "kills")
-
-        # Middles: stat = kills
-        returning_mb_names = format_returning_players(ret_mbs, "kills")
-
-        # DS / Libero: stat = digs
-        returning_def_names = format_returning_players(ret_defs, "digs")
-
-        # Transfers from roster flags
-        incoming_transfer_names = format_transfer_players(incoming_transfers)
-        outgoing_transfer_names = format_transfer_players(outgoing_transfers)
-
-        # ----- Append config-based incoming transfers in the same format -----
-        extra_rows = []
-        existing_incoming_names = {
-            str(n).strip().lower() for n in incoming_transfers["name"]
-        }
-
-        for xfer in incoming_cfg_only:
-            nm = str(xfer.get("name", "")).strip()
-            if not nm or nm.lower() in existing_incoming_names:
-                continue
-
-            # Lookup position/class from the full DF (source roster)
-            info = lookup_player_info_by_name(df, nm)
-            pos = info.get("position", "")
-            cls = info.get("class", "")
-
-            extra_rows.append(f"{nm} ({pos} - {cls})")
-
-        if extra_rows:
-            extra_str = ", ".join(extra_rows)
-            if incoming_transfer_names:
-                incoming_transfer_names = incoming_transfer_names + ", " + extra_str
-            else:
-                incoming_transfer_names = extra_str
-
-        # ------- Simple counts (use max; they are constant per team from main script) -------
-
-        def max_int(col: str) -> int:
-            if col not in g.columns:
-                return 0
-            return max([to_int_safe(v) for v in g[col].unique()] + [0])
-
-        row: Dict[str, Any] = {
-            "team": team,
-            "conference": conf,
-            "team_rpi_rank": rpi_rank,
-            "team_overall_record": rpi_record,
-            "offense_type": offense_type,
-        }
-
-        # Position counts (from main script columns)
-        for col in [
-            "returning_setter_count_2026",
-            "incoming_setter_count_2026",
-            "projected_setter_count_2026",
-            "returning_pin_hitter_count_2026",
-            "incoming_pin_hitter_count_2026",
-            "projected_pin_hitter_count_2026",
-            "returning_middle_blocker_count_2026",
-            "incoming_middle_blocker_count_2026",
-            "projected_middle_blocker_count_2026",
-            "returning_def_specialist_count_2026",
-            "incoming_def_specialist_count_2026",
-            "projected_def_specialist_count_2026",
-        ]:
-            if col in g.columns:
-                row[col] = max_int(col)
-            else:
-                row[col] = 0
-
-        # Name lists (returning by position)
-        row["returning_setter_names_2026"] = returning_setter_names
-        row["returning_pin_hitter_names_2026"] = returning_pin_names
-        row["returning_middle_blocker_names_2026"] = returning_mb_names
-        row["returning_def_specialist_names_2026"] = returning_def_names
-
-        # Transfers (incoming/outgoing)
-        row["incoming_transfer_names"] = incoming_transfer_names
-        row["outgoing_transfer_names"] = outgoing_transfer_names
-
-        # Incoming positional players (from main script; same for all rows on team)
-        for col in [
-            "incoming_setter_names_2026",
-            "incoming_pin_hitter_names_2026",
-            "incoming_middle_blocker_names_2026",
-            "incoming_def_specialist_names_2026",
-        ]:
-            if col in g.columns:
-                row[col] = first_non_empty(g[col])
-            else:
-                row[col] = ""
-
-        # Average height (overall & by pos) in nice "5' 11"" format
-        def avg_height_for_mask(mask: pd.Series) -> str:
-            h = g.loc[mask, "height_inches"]
-            if h.empty:
-                return ""
-            return inches_to_height_str(h.mean())
-
-        row["avg_height_team"] = avg_height_for_mask(g["height_inches"].notna())
-        row["avg_height_setters"] = avg_height_for_mask(ms_setter & g["height_inches"].notna())
-        row["avg_height_pins"] = avg_height_for_mask(ms_pin & g["height_inches"].notna())
-        row["avg_height_middles"] = avg_height_for_mask(ms_mb & g["height_inches"].notna())
-        row["avg_height_defs"] = avg_height_for_mask(ms_def & g["height_inches"].notna())
-
-        # ------- Coaches: first non-empty per team -------
-
-        coach_fields = [
-            "coach1_name", "coach1_title", "coach1_email", "coach1_phone",
-            "coach2_name", "coach2_title", "coach2_email", "coach2_phone",
-            "coach3_name", "coach3_title", "coach3_email", "coach3_phone",
-            "coach4_name", "coach4_title", "coach4_email", "coach4_phone",
-            "coach5_name", "coach5_title", "coach5_email", "coach5_phone",
-        ]
-
-        for cf in coach_fields:
-            if cf in g.columns:
-                row[cf] = first_non_empty(g[cf])
-            else:
-                row[cf] = ""
-
-        teams.append(row)
-
-    pivot_df = pd.DataFrame(teams)
-
-    # Make sure RPI record stays as text (not date)
-    pivot_df["team_overall_record"] = pivot_df["team_overall_record"].astype(str)
-
-    return pivot_df
+def to_int_safe(val: Any) -> int:
+    """Safely convert to int, return 0 if fails."""
+    try:
+        return int(float(val))
+    except:
+        return 0
 
 
 def main():
-    # Read the main file *as strings*
-    df = pd.read_csv(INPUT_CSV, dtype=str, keep_default_na=False)
-
-    # Map friendly column headers (from main scraper) back to internal names
-    df = map_friendly_headers_to_internal(df)
-
-    pivot_df = build_team_pivot(df)
-
-    # ---- INTERNAL COLUMN ORDER (snake_case) ----
-    ordered = [
-        # Base info
-        "team",
-        "conference",
-        "team_rpi_rank",
-        "team_overall_record",
-        "offense_type",
-
-        # --- SETTERS ---
-        "returning_setter_count_2026",
-        "returning_setter_names_2026",
-        "incoming_setter_count_2026",
-        "incoming_setter_names_2026",
-        "projected_setter_count_2026",
-
-        # --- PIN HITTERS ---
-        "returning_pin_hitter_count_2026",
-        "returning_pin_hitter_names_2026",
-        "incoming_pin_hitter_count_2026",
-        "incoming_pin_hitter_names_2026",
-        "projected_pin_hitter_count_2026",
-
-        # --- MIDDLE BLOCKERS ---
-        "returning_middle_blocker_count_2026",
-        "returning_middle_blocker_names_2026",
-        "incoming_middle_blocker_count_2026",
-        "incoming_middle_blocker_names_2026",
-        "projected_middle_blocker_count_2026",
-
-        # --- DEFENSIVE SPECIALISTS / LIBEROS ---
-        "returning_def_specialist_count_2026",
-        "returning_def_specialist_names_2026",
-        "incoming_def_specialist_count_2026",
-        "incoming_def_specialist_names_2026",
-        "projected_def_specialist_count_2026",
-
-        # Transfers
-        "incoming_transfer_names",
-        "outgoing_transfer_names",
-
-        # Heights
-        "avg_height_team",
-        "avg_height_setters",
-        "avg_height_pins",
-        "avg_height_middles",
-        "avg_height_defs",
-
-        # Coaches
-        "coach1_name", "coach1_title", "coach1_email", "coach1_phone",
-        "coach2_name", "coach2_title", "coach2_email", "coach2_phone",
-        "coach3_name", "coach3_title", "coach3_email", "coach3_phone",
-        "coach4_name", "coach4_title", "coach4_email", "coach4_phone",
-        "coach5_name", "coach5_title", "coach5_email", "coach5_phone",
-    ]
-
-    # Append leftovers in case new columns were added upstream
-    existing_cols = list(pivot_df.columns)
-    leftovers = [c for c in existing_cols if c not in ordered]
-    ordered += leftovers
-
-    pivot_df = pivot_df[ordered]
-
-    # ---- BUILD RAW DF FOR CSV (UNPROTECTED VALUES) ----
-    raw_df = pivot_df.copy()
-
-    if "team_overall_record" in raw_df.columns:
-        raw_df["team_overall_record"] = raw_df["team_overall_record"].apply(excel_unprotect)
-
-    for col in raw_df.columns:
-        if col.endswith("_phone"):
-            raw_df[col] = raw_df[col].apply(excel_unprotect)
-
-    # ---- RENAME TO FRIENDLY NAMES (same mapping for TSV & CSV) ----
-    friendly_names = {
-        # Returning names (by position)
-        "returning_setter_names_2026": "returning_setters",
-        "returning_pin_hitter_names_2026": "returning_pins",
-        "returning_middle_blocker_names_2026": "returning_middles",
-        "returning_def_specialist_names_2026": "returning_defs",
-
-        # Incoming names (by position)
-        "incoming_setter_names_2026": "incoming_setters",
-        "incoming_pin_hitter_names_2026": "incoming_pins",
-        "incoming_middle_blocker_names_2026": "incoming_middles",
-        "incoming_def_specialist_names_2026": "incoming_defs",
-
-        # Transfers
-        "incoming_transfer_names": "incoming_transfers",
-        "outgoing_transfer_names": "outgoing_transfers",
+    logger.info("Reading simplified scraper output: %s", INPUT_CSV)
+    
+    # Read the simplified CSV
+    df = pd.read_csv(INPUT_CSV)
+    
+    # Normalize column names (friendly headers -> internal)
+    col_map = {
+        "Team": "team",
+        "Conference": "conference",
+        "Rank": "rank",
+        "Record": "record",
+        "Name": "name",
+        "Position": "position",
+        "Class": "class",
+        "Height": "height",
+        "MS": "matches_started",
+        "MP": "matches_played",
+        "SP": "sets_played",
+        "PTS": "points",
+        "PTS/S": "points_per_set",
+        "K": "kills",
+        "K/S": "kills_per_set",
+        "AE": "attack_errors",
+        "TA": "total_attacks",
+        "HIT%": "hitting_pct",
+        "A": "assists",
+        "A/S": "assists_per_set",
+        "SA": "aces",
+        "SA/S": "aces_per_set",
+        "SE": "service_errors",
+        "D": "digs",
+        "D/S": "digs_per_set",
+        "RE": "reception_errors",
+        "BS": "block_solos",
+        "BA": "block_assists",
+        "TB": "total_blocks",
+        "B/S": "blocks_per_set",
+        "BHE": "ball_handling_errors",
+        "Rec%": "reception_pct",
     }
-
-    pivot_df = pivot_df.rename(columns=friendly_names)
-    raw_df = raw_df.rename(columns=friendly_names)
-
-    # ---- BEAUTIFY ALL COLUMN HEADERS ----
-    def beautify_out(col: str) -> str:
-        """
-        Convert snake_case (or similar) names to 'Title Case' without underscores
-        and strip '2026' from the header.
-        """
-        return beautify(col)
-
-    raw_df = raw_df.rename(columns={c: beautify_out(c) for c in raw_df.columns})
-
-    # ---- WRITE CSV (no Excel protections) ----
-    raw_df.to_csv(OUTPUT_CSV, index=False, quoting=csv.QUOTE_MINIMAL)
-
-    print(f"Wrote team pivot to {OUTPUT_CSV}")
-    print("Columns:", list(raw_df.columns))
+    df = df.rename(columns=col_map)
+    
+    # Parse incoming players
+    logger.info("Parsing incoming players...")
+    incoming_players = parse_incoming_players()
+    
+    # Build transfer lookups
+    outgoing_by_team = {}
+    incoming_by_team = {}
+    
+    for xfer in OUTGOING_TRANSFERS:
+        old_team_key = normalize_school_key(xfer["old_team"])
+        new_team_key = normalize_school_key(xfer["new_team"])
+        
+        if old_team_key not in outgoing_by_team:
+            outgoing_by_team[old_team_key] = []
+        outgoing_by_team[old_team_key].append(xfer)
+        
+        if new_team_key not in incoming_by_team:
+            incoming_by_team[new_team_key] = []
+        incoming_by_team[new_team_key].append(xfer)
+    
+    # Process each team
+    results = []
+    
+    for team_name, team_df in df.groupby("team"):
+        logger.info("Processing team: %s", team_name)
+        team_key = normalize_school_key(team_name)
+        team_info = get_team_info(team_name)
+        
+        # Get team metadata
+        conference = team_df["conference"].iloc[0] if "conference" in team_df.columns else ""
+        rank = team_df["rank"].iloc[0] if "rank" in team_df.columns else ""
+        record = team_df["record"].iloc[0] if "record" in team_df.columns else ""
+        roster_url = team_info.get("url", "")
+        stats_url = team_info.get("stats_url", "")
+        
+        # Calculate positional flags for each player
+        players_data = []
+        for _, row in team_df.iterrows():
+            position_raw = str(row.get("position", ""))
+            pos_codes = extract_position_codes(position_raw)
+            
+            # S/DS doesn't count as setter
+            is_setter = ("S" in pos_codes) and ("DS" not in pos_codes)
+            is_pin = ("OH" in pos_codes) or ("RS" in pos_codes)
+            is_middle = "MB" in pos_codes
+            is_def = "DS" in pos_codes
+            
+            class_str = str(row.get("class", ""))
+            class_norm = normalize_class(class_str)
+            is_grad = is_graduating(class_norm)
+            class_next = class_next_year(class_norm)
+            
+            # Check if outgoing transfer
+            player_name = str(row.get("name", ""))
+            is_outgoing = False
+            for xfer in outgoing_by_team.get(team_key, []):
+                if normalize_player_name(xfer["name"]) == normalize_player_name(player_name):
+                    is_outgoing = True
+                    break
+            
+            players_data.append({
+                "name": player_name,
+                "position_raw": position_raw,
+                "pos_codes": pos_codes,
+                "is_setter": is_setter,
+                "is_pin": is_pin,
+                "is_middle": is_middle,
+                "is_def": is_def,
+                "class": class_norm,
+                "class_next": class_next,
+                "is_graduating": is_grad,
+                "is_outgoing_transfer": is_outgoing,
+                "height": str(row.get("height", "")),
+                "assists": to_int_safe(row.get("assists", 0)),
+                "kills": to_int_safe(row.get("kills", 0)),
+                "digs": to_int_safe(row.get("digs", 0)),
+            })
+        
+        # Calculate returning players (not graduating, not outgoing transfer)
+        returning_players = [p for p in players_data if not p["is_graduating"] and not p["is_outgoing_transfer"]]
+        
+        # Returning by position
+        ret_setters = [p for p in returning_players if p["is_setter"]]
+        ret_pins = [p for p in returning_players if p["is_pin"]]
+        ret_middles = [p for p in returning_players if p["is_middle"]]
+        ret_defs = [p for p in returning_players if p["is_def"]]
+        
+        # Format returning player names with class and primary stat
+        def format_returning(players, stat_key):
+            parts = []
+            for p in players:
+                stat_val = p.get(stat_key, 0)
+                parts.append(f"{p['name']} - {p['class_next']} ({stat_val})")
+            return ", ".join(parts)
+        
+        ret_setter_names = format_returning(ret_setters, "assists")
+        ret_pin_names = format_returning(ret_pins, "kills")
+        ret_middle_names = format_returning(ret_middles, "kills")
+        ret_def_names = format_returning(ret_defs, "digs")
+        
+        # Incoming players from incoming_players.py
+        incoming_for_team = [p for p in incoming_players if normalize_school_key(p["school"]) == team_key]
+        
+        # Categorize incoming by position
+        inc_setters = []
+        inc_pins = []
+        inc_middles = []
+        inc_defs = []
+        
+        for p in incoming_for_team:
+            codes = extract_position_codes(p["position"])
+            if ("S" in codes) and ("DS" not in codes):
+                inc_setters.append(p)
+            if ("OH" in codes) or ("RS" in codes):
+                inc_pins.append(p)
+            if "MB" in codes:
+                inc_middles.append(p)
+            if "DS" in codes:
+                inc_defs.append(p)
+        
+        def format_incoming(players):
+            return ", ".join([f"{p['name']} ({p['position']})" for p in players])
+        
+        inc_setter_names = format_incoming(inc_setters)
+        inc_pin_names = format_incoming(inc_pins)
+        inc_middle_names = format_incoming(inc_middles)
+        inc_def_names = format_incoming(inc_defs)
+        
+        # Projected counts
+        proj_setter_count = len(ret_setters) + len(inc_setters)
+        proj_pin_count = len(ret_pins) + len(inc_pins)
+        proj_middle_count = len(ret_middles) + len(inc_middles)
+        proj_def_count = len(ret_defs) + len(inc_defs)
+        
+        # Transfers
+        outgoing_xfers = outgoing_by_team.get(team_key, [])
+        incoming_xfers = incoming_by_team.get(team_key, [])
+        
+        def format_transfers(xfers):
+            return ", ".join([f"{x['name']}" for x in xfers])
+        
+        outgoing_transfers_str = format_transfers(outgoing_xfers)
+        incoming_transfers_str = format_transfers(incoming_xfers)
+        
+        # Average heights
+        def avg_height(players):
+            heights = [height_to_inches(p["height"]) for p in players]
+            heights = [h for h in heights if not pd.isna(h)]
+            if heights:
+                return inches_to_height(sum(heights) / len(heights))
+            return ""
+        
+        avg_setter_height = avg_height(ret_setters)
+        avg_pin_height = avg_height(ret_pins)
+        avg_middle_height = avg_height(ret_middles)
+        avg_def_height = avg_height(ret_defs)
+        
+        # Offense type (based on assists >= 350)
+        setters_with_assists = [p for p in players_data if p["is_setter"] and p["assists"] >= 350]
+        if len(setters_with_assists) >= 2:
+            offense_type = "6-2"
+        elif len(setters_with_assists) == 1:
+            offense_type = "5-1"
+        else:
+            offense_type = "Unknown"
+        
+        # Get coaches (scrape if URLs available)
+        coach_cols = {}
+        if roster_url:
+            try:
+                roster_html = fetch_html(roster_url)
+                coaches_html = roster_html
+                
+                alt_coaches_url = find_coaches_page_url(roster_html, roster_url)
+                if alt_coaches_url:
+                    try:
+                        coaches_html = fetch_html(alt_coaches_url)
+                    except:
+                        pass
+                
+                coaches = parse_coaches_from_html(coaches_html)
+                coach_cols = pack_coaches_for_row(coaches)
+            except Exception as e:
+                logger.warning("Could not fetch coaches for %s: %s", team_name, e)
+        
+        # Build result row
+        result = {
+            "team": team_name,
+            "conference": conference,
+            "rank": rank,
+            "record": record,
+            "roster_url": roster_url,
+            "stats_url": stats_url,
+            
+            "returning_setter_count": len(ret_setters),
+            "returning_setter_names": ret_setter_names,
+            "incoming_setter_count": len(inc_setters),
+            "incoming_setter_names": inc_setter_names,
+            "projected_setter_count": proj_setter_count,
+            "avg_setter_height": avg_setter_height,
+            
+            "returning_pin_count": len(ret_pins),
+            "returning_pin_names": ret_pin_names,
+            "incoming_pin_count": len(inc_pins),
+            "incoming_pin_names": inc_pin_names,
+            "projected_pin_count": proj_pin_count,
+            "avg_pin_height": avg_pin_height,
+            
+            "returning_middle_count": len(ret_middles),
+            "returning_middle_names": ret_middle_names,
+            "incoming_middle_count": len(inc_middles),
+            "incoming_middle_names": inc_middle_names,
+            "projected_middle_count": proj_middle_count,
+            "avg_middle_height": avg_middle_height,
+            
+            "returning_def_count": len(ret_defs),
+            "returning_def_names": ret_def_names,
+            "incoming_def_count": len(inc_defs),
+            "incoming_def_names": inc_def_names,
+            "projected_def_count": proj_def_count,
+            "avg_def_height": avg_def_height,
+            
+            "outgoing_transfers": outgoing_transfers_str,
+            "incoming_transfers": incoming_transfers_str,
+            
+            "offense_type": offense_type,
+        }
+        
+        result.update(coach_cols)
+        results.append(result)
+    
+    # Write output
+    logger.info("Writing team pivot to: %s", OUTPUT_CSV)
+    
+    if results:
+        fieldnames = list(results[0].keys())
+        with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        logger.info("Wrote %d team rows", len(results))
+    else:
+        logger.warning("No results to write")
 
 
 if __name__ == "__main__":
