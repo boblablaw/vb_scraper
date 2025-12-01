@@ -24,6 +24,7 @@ vb_scraper/
 │   ├── stats.py
 │   ├── team_analysis.py
 │   ├── coaches.py
+│   ├── coaches_cache.py
 │   ├── transfers.py
 │   ├── rpi_lookup.py
 │   ├── logging_utils.py
@@ -36,7 +37,8 @@ vb_scraper/
 │   ├── incoming_players_data_2025.py
 │   ├── incoming_players_data_2026.py
 │   ├── INCOMING_PLAYERS_README.md
-│   └── manual_rosters.csv
+│   ├── manual_rosters.csv
+│   └── coaches_cache.json
 ├── tests/                  # Test suite
 │   ├── test_settings.py
 │   └── test_data/
@@ -45,12 +47,14 @@ vb_scraper/
 │   └── reports/
 ├── scripts/                # Utility scripts
 │   ├── find_missing_urls*.py
-│   └── export_incoming_players.py
+│   ├── export_incoming_players.py
+│   └── fetch_coaches.py
 ├── docs/                   # Documentation
 │   ├── PROJECT_SUMMARY.md
 │   ├── KNOWN_LIMITATIONS.md
 │   ├── FUTURE_ENHANCEMENTS.md
-│   └── TEST_README.md
+│   ├── TEST_README.md
+│   └── COACHES_CACHE.md
 └── exports/                # Output files
 ```
 
@@ -77,11 +81,20 @@ python -m src.run_scraper --output my_custom_rosters_2025
 # Export incoming players data to CSV
 python scripts/export_incoming_players.py --year 2026 --output exports/incoming_players_2026.csv
 
+# Fetch and cache coaching staff data (one-time setup, refresh seasonally)
+python scripts/fetch_coaches.py
+
 # 2. (Optional) Merge manual roster data for JavaScript-rendered sites
 python -m src.merge_manual_rosters
 
-# 3. Generate team-level analysis and aggregations
+# 3. Generate team-level analysis and aggregations (uses cached coaches by default)
 python -m src.create_team_pivot_csv
+
+# Optional: Refresh coaches live instead of using cache (slower)
+python -m src.create_team_pivot_csv --refresh-coaches
+
+# Optional: Skip coaches data entirely
+python -m src.create_team_pivot_csv --no-cache
 
 # 4. (Optional) Export transfer data separately
 python -m src.create_transfers_csv
@@ -174,7 +187,7 @@ src/create_team_pivot_csv.py (team-level analysis)
     ├─ Match incoming players (from incoming_players_data.py with year-based selection)
     │   └─ Date logic: Aug 1 - Jul 31 cycles (Dec 2025 → uses 2026 data)
     ├─ Match transfers (from OUTGOING_TRANSFERS)
-    ├─ Scrape coach information (emails, phones)
+    ├─ Load coach information from cache (or scrape live if --refresh-coaches)
     ├─ Calculate projected 2025 rosters by position
     ├─ Calculate average heights by position
     ├─ Determine offense type (5-1 vs 6-2 based on assists)

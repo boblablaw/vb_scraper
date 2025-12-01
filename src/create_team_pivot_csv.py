@@ -20,7 +20,8 @@ from scraper.utils import (
     is_graduating,
     extract_position_codes,
 )
-from scraper.coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
+from scraper.coaches_cache import load_coaches_cache, get_coaches_for_team, pack_coaches_for_row
+from scraper.coaches import find_coaches_page_url, parse_coaches_from_html
 from scraper.utils import fetch_html
 from scraper.logging_utils import setup_logging, get_logger
 
@@ -123,7 +124,16 @@ def to_int_safe(val: Any) -> int:
         return 0
 
 
-def main(input_csv=None, output_csv=None):
+def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coaches=False):
+    """
+    Generate team pivot CSV from scraper output.
+    
+    Args:
+        input_csv: Input CSV file with per-player data
+        output_csv: Output CSV file for team-level data
+        use_coaches_cache: If True, load coaches from cache file (default: True)
+        refresh_coaches: If True, fetch coaches live instead of using cache (default: False)
+    """
     input_csv = input_csv or INPUT_CSV
     output_csv = output_csv or OUTPUT_CSV
     
@@ -172,6 +182,19 @@ def main(input_csv=None, output_csv=None):
     # Parse incoming players
     logger.info("Parsing incoming players...")
     incoming_players = parse_incoming_players()
+    
+    # Load coaches cache (if enabled)
+    coaches_cache = {}
+    if use_coaches_cache and not refresh_coaches:
+        logger.info("Loading coaches from cache...")
+        coaches_cache = load_coaches_cache()
+        if coaches_cache:
+            logger.info(f"Loaded coaches for {len(coaches_cache)} teams from cache")
+        else:
+            logger.warning("No coaches cache found. Run 'python scripts/fetch_coaches.py' to create one.")
+            logger.info("Continuing without coaches data...")
+    elif refresh_coaches:
+        logger.info("Refresh mode: Will fetch coaches live for each team")
     
     # Build transfer lookups
     outgoing_by_team = {}
@@ -335,10 +358,22 @@ def main(input_csv=None, output_csv=None):
         else:
             offense_type = "Unknown"
         
-        # Get coaches (scrape if URLs available)
+        # Get coaches (from cache or live fetch)
         coach_cols = {}
-        if roster_url:
+        
+        if use_coaches_cache and not refresh_coaches:
+            # Use cached coaches
+            coaches = get_coaches_for_team(team_name, coaches_cache)
+            if coaches:
+                logger.debug(f"Using {len(coaches)} cached coach(es) for {team_name}")
+                coach_cols = pack_coaches_for_row(coaches)
+            else:
+                logger.debug(f"No cached coaches for {team_name}")
+                coach_cols = pack_coaches_for_row([])  # Empty coach columns
+        elif refresh_coaches and roster_url:
+            # Fetch coaches live
             try:
+                logger.debug(f"Fetching coaches live for {team_name}")
                 roster_html = fetch_html(roster_url)
                 coaches_html = roster_html
                 
@@ -353,15 +388,20 @@ def main(input_csv=None, output_csv=None):
                 coach_cols = pack_coaches_for_row(coaches)
             except Exception as e:
                 logger.warning("Could not fetch coaches for %s: %s", team_name, e)
+                coach_cols = pack_coaches_for_row([])  # Empty coach columns
+        else:
+            # No coaches (cache disabled and not refreshing, or no URL)
+            coach_cols = pack_coaches_for_row([])
         
         # Build result row
         result = {
             "team": team_name,
             "conference": conference,
-            "rank": rank,
-            "record": record,
             "roster_url": roster_url,
             "stats_url": stats_url,
+            "rank": rank,
+            "record": record,
+            "offense_type": offense_type,
             
             "returning_setter_count": len(ret_setters),
             "returning_setter_names": ret_setter_names,
@@ -393,8 +433,6 @@ def main(input_csv=None, output_csv=None):
             
             "outgoing_transfers": outgoing_transfers_str,
             "incoming_transfers": incoming_transfers_str,
-            
-            "offense_type": offense_type,
         }
         
         result.update(coach_cols)
@@ -427,7 +465,24 @@ if __name__ == "__main__":
         default=OUTPUT_CSV,
         help=f"Output CSV file (default: {OUTPUT_CSV})"
     )
+    parser.add_argument(
+        "--no-cache",
+        dest="use_coaches_cache",
+        action="store_false",
+        help="Don't use coaches cache (will produce empty coach columns)"
+    )
+    parser.add_argument(
+        "--refresh-coaches",
+        dest="refresh_coaches",
+        action="store_true",
+        help="Fetch coaches live instead of using cache (slow)"
+    )
     args = parser.parse_args()
     
     setup_logging()
-    main(input_csv=args.input, output_csv=args.output)
+    main(
+        input_csv=args.input,
+        output_csv=args.output,
+        use_coaches_cache=args.use_coaches_cache,
+        refresh_coaches=args.refresh_coaches
+    )
