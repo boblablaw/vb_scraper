@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 def find_coaches_page_url(roster_html: str, roster_url: str) -> str | None:
     """
     Try to find a dedicated 'Coaching Staff' or 'Coaches' page from the roster HTML.
+    If not found via links, try common URL patterns.
     """
     soup = BeautifulSoup(roster_html, "html.parser")
     
@@ -46,7 +47,22 @@ def find_coaches_page_url(roster_html: str, roster_url: str) -> str | None:
             logger.debug("Found 'Coaches' link: %s", url)
             return url
 
-    logger.debug("No dedicated coaching staff link found on roster page.")
+    # If no link found, try common URL patterns
+    # roster URL is typically like: https://site.com/sports/womens-volleyball/roster
+    # coaches URL is typically: https://site.com/sports/womens-volleyball/coaches
+    logger.debug("No dedicated coaching staff link found, trying common patterns...")
+    
+    if "/roster" in roster_url:
+        # Try replacing /roster with /coaches
+        coaches_url = roster_url.replace("/roster", "/coaches")
+        logger.debug("Trying pattern URL: %s", coaches_url)
+        return coaches_url
+    elif roster_url.endswith("/"):
+        coaches_url = roster_url + "coaches"
+        logger.debug("Trying pattern URL: %s", coaches_url)
+        return coaches_url
+    
+    logger.debug("Could not determine coaches page URL.")
     return None
 
 
