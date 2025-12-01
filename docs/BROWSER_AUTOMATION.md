@@ -253,6 +253,21 @@ Add a flag to `teams.py`:
    - Look for XML sitemaps or RSS feeds
    - Contact athletic department for data access
 
+## LSU Volleyball Stats Structure
+
+LSU's stats page (`/sports/vb/cumestats/`) provides:
+- **Year dropdown** (`id="cumestats_season"`) - Select season (2017-2025)
+- **Single combined stats table** - All cumulative season stats in one table
+
+The page does NOT have separate dropdowns for:
+- Individual stats vs. Team stats
+- Offense vs. Defense categories
+
+All stats are combined in the `.advanced-table__table`. If you need specific stat categories, they may be:
+1. Different columns in the same table
+2. Available at different URLs (e.g., `/sports/vb/stats/` for per-match stats)
+3. In PDF format (check the stats download links)
+
 ## Alternative: Playwright
 
 If Selenium has issues, consider [Playwright](https://playwright.dev/python/) as an alternative:
