@@ -262,8 +262,15 @@ def extract_position_codes(position: str) -> Set[str]:
     if "setter" in joined or re.search(r"\bs\b", joined):
         codes.add("S")
 
-    # Right side / Opposite
-    if "opp" in joined or "opposite" in joined or "right side" in joined or re.search(r"\brs\b", joined):
+    # Right side / Opposite / Rightside Hitter
+    if (
+        "opp" in joined 
+        or "opposite" in joined 
+        or "right side" in joined
+        or "rightside" in joined
+        or re.search(r"\brs\b", joined)
+        or re.search(r"\brh\b", joined)
+    ):
         codes.add("RS")
 
     # Middle blocker
@@ -275,6 +282,7 @@ def extract_position_codes(position: str) -> Set[str]:
         "outside" in joined 
         or "pin" in joined 
         or "left side" in joined
+        or "left" in joined
         or re.search(r"\boh\b", joined)
         or re.search(r"\bls\b", joined)
     ):
@@ -290,10 +298,15 @@ def extract_position_codes(position: str) -> Set[str]:
         codes.add("DS")
     
     # Handle special combined positions
-    # "Utility" = OH/DS
-    if "utility" in joined or re.search(r"\butl\b", joined):
+    # "Utility" = OH/DS, "UU" = OH/DS
+    if "utility" in joined or re.search(r"\butl\b", joined) or re.search(r"\buu\b", joined):
         codes.add("OH")
         codes.add("DS")
+    
+    # "Opposite/Setter" = S/RS
+    if ("opposite" in joined or "opp" in joined) and "setter" in joined:
+        codes.add("S")
+        codes.add("RS")
     
     # "Opposite Hitter/Middle Blocker" = RS/MB (already handled by individual checks above)
     # But explicitly handle if we see both in the string
