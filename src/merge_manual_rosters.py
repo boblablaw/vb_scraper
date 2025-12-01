@@ -24,7 +24,8 @@ from pathlib import Path
 from scraper.utils import (
     normalize_class, 
     normalize_height,
-    normalize_school_key
+    normalize_school_key,
+    extract_position_codes
 )
 
 
@@ -96,6 +97,10 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
             class_raw = str(row['Class']) if pd.notna(row['Class']) else ''
             height_raw = str(row['Height']) if pd.notna(row['Height']) else ''
             
+            # Normalize position to codes (S, OH, RS, MB, DS)
+            position_codes = extract_position_codes(position_raw)
+            position_normalized = '/'.join(sorted(position_codes)) if position_codes else ''
+            
             class_normalized = normalize_class(class_raw)
             height_normalized = normalize_height(height_raw)
             
@@ -106,7 +111,7 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
             if len(existing_player) > 0:
                 # Update existing player - preserve stats, update roster fields
                 idx = existing_player.index[0]
-                scraped_df.at[idx, 'Position'] = position_raw
+                scraped_df.at[idx, 'Position'] = position_normalized
                 scraped_df.at[idx, 'Class'] = class_normalized
                 scraped_df.at[idx, 'Height'] = height_normalized
                 manual_updates.append(('updated', team, name))
@@ -116,7 +121,7 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
                     'Team': team,
                     'Conference': team_data.get('conference', ''),
                     'Name': name,
-                    'Position': position_raw,
+                    'Position': position_normalized,
                     'Class': class_normalized,
                     'Height': height_normalized,
                 }

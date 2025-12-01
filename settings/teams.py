@@ -1152,7 +1152,7 @@ TEAMS = [
         "stats_url": "https://kentstatesports.com/sports/womens-volleyball/stats/",
     },
     {
-        "team": "Miami University (Miami (Ohio))",
+        "team": "Miami University (Ohio)",
         "conference": "Mid-American Conference",
         "url": "https://miamiredhawks.com/sports/womens-volleyball/roster/2025",
         "stats_url": "https://miamiredhawks.com/sports/womens-volleyball/stats/",
