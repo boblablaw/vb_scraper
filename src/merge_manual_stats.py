@@ -54,13 +54,121 @@ def parse_manual_stats_file(filepath: str) -> pd.DataFrame:
     Returns DataFrame with player names and stats.
     """
     try:
-        # Read CSV - first row has category headers, second row has stat names
-        df = pd.read_csv(filepath, skiprows=1)  # Skip category row, use stat names
+        # Read CSV with header=None to inspect structure
+        df_raw = pd.read_csv(filepath, header=None)
+        
+        # Row 0 is category headers, row 1 is stat names (our actual headers)
+        # Row 2+ are data rows
+        if len(df_raw) < 2:
+            return pd.DataFrame()
+        
+        # Use row 1 as column names, but handle duplicates and empties
+        stat_names_raw = df_raw.iloc[1].tolist()
+        
+        # Detect if there's a missing column header (e.g., PTS total missing at index 5)
+        # This happens in SIDEARM stats exports where a column exists but has no name
+        # Look for pattern: empty column followed by stat names that don't align with data
+        has_offset = False
+        empty_indices = []
+        for i, name in enumerate(stat_names_raw):
+            name_str = str(name).strip() if pd.notna(name) else ""
+            if not name_str and i > 1:  # Skip jersey and player columns
+                empty_indices.append(i)
+        
+        # If we find an empty column in the middle (after player name), there's likely an offset
+        # Common pattern: col 5 is empty (should be PTS) causing all subsequent names to shift left
+        if empty_indices and 4 <= empty_indices[0] <= 6:
+            has_offset = True
+            print(f"  Detected missing column header at index {empty_indices[0]} - will use positional mapping")
+        
+        # Make column names unique by appending index to duplicates/empties
+        stat_names = []
+        seen = {}
+        for i, name in enumerate(stat_names_raw):
+            # Convert to string and strip whitespace
+            name_str = str(name).strip() if pd.notna(name) else ""
+            
+            # If empty or duplicate, make it unique
+            if not name_str or name_str in seen:
+                # Use column index as name for empty/duplicate columns
+                unique_name = f"col_{i}"
+                stat_names.append(unique_name)
+                seen[unique_name] = 1
+            else:
+                stat_names.append(name_str)
+                seen[name_str] = 1
+        
+        # Read data starting from row 2 (skip rows 0 and 1)
+        df = pd.read_csv(filepath, skiprows=2, names=stat_names)
+        
+        # If we detected an offset, rename columns based on position
+        if has_offset:
+            # Standard SIDEARM offensive stats column positions:
+            # 0:#, 1:Player, 2:SP, 3:MP, 4:MS, 5:PTS(total), 6:PTS/S, 7:K, 8:K/S, 9:E, 10:TA, 11:PCT, 12:A, 13:A/S, 14:SA, 15:SA/S, 16:SE
+            # Standard SIDEARM defensive stats column positions:
+            # 0:#, 1:Player, 2:SP, 3:DIG, 4:DIG/S, 5:empty, 6:RE, 7:TA, 8:Rec%, 9:RE/S, 10:BS, 11:BA, 12:BLK, 13:BLK/S, 14:BE, 15:BHE
+            
+            # Try to detect if this is offensive or defensive stats
+            is_offensive = 'K' in stat_names or 'PTS' in stat_names or 'A' in stat_names
+            
+            if is_offensive and len(stat_names) >= 17:
+                # Map by position for offensive stats
+                positional_names = [
+                    stat_names[0],  # 0: # (jersey)
+                    stat_names[1],  # 1: Player
+                    'SP',   # 2
+                    'MP',   # 3
+                    'MS',   # 4
+                    'PTS_total',  # 5 (unnamed in header)
+                    'PTS/S',  # 6
+                    'K',    # 7
+                    'K/S',  # 8
+                    'E',    # 9
+                    'TA',   # 10
+                    'PCT',  # 11
+                    'A',    # 12
+                    'A/S',  # 13
+                    'SA',   # 14
+                    'SA/S', # 15
+                    'SE',   # 16
+                ] + stat_names[17:]  # Keep any additional columns
+                df.columns = positional_names[:len(df.columns)]
+            elif not is_offensive and len(stat_names) >= 15:
+                # Map by position for defensive stats
+                # Correct mapping (based on data positions):
+                # 0:#, 1:Player, 2:SP, 3:DIG, 4:DIG/S, 5:RE, 6:TA_RECV, 7:Rec%, 8:RE/S, 9:BS, 10:BA, 11:BLK, 12:BLK/S, 13:BE, 14:BHE, 15:Bio
+                positional_names = [
+                    stat_names[0],  # 0: # (jersey)
+                    stat_names[1],  # 1: Player
+                    'SP',       # 2
+                    'DIG',      # 3
+                    'DIG/S',    # 4
+                    'RE',       # 5 (reception errors - unnamed in header)
+                    'TA_RECV',  # 6 (total reception attempts)
+                    'Rec%',     # 7 (reception percentage)
+                    'RE/S',     # 8 (reception errors per set)
+                    'BS',       # 9
+                    'BA',       # 10
+                    'BLK',      # 11 (total blocks)
+                    'BLK/S',    # 12
+                    'BE',       # 13 (blocking errors)
+                    'BHE',      # 14 (ball handling errors)
+                    'Bio',      # 15 (bio link / unused)
+                ] + stat_names[16:]  # Keep any additional columns
+                df.columns = positional_names[:len(df.columns)]
         
         # Filter out total/opponent rows
         if df.shape[1] > 1:
-            # Second column usually has player names
-            player_col = df.columns[1]
+            # Second column usually has player names (should be 'Player' or col_1)
+            player_col = None
+            for col in df.columns[0:3]:  # Check first 3 columns
+                if col.lower() == 'player' or 'player' in str(col).lower():
+                    player_col = col
+                    break
+            
+            if not player_col:
+                player_col = df.columns[1]  # Fallback to second column
+            
             df = df[~df[player_col].astype(str).str.contains('Total|Opponents', case=False, na=False)]
             # Rename player column to 'Player' for easier access
             df = df.rename(columns={player_col: 'Player'})
@@ -113,7 +221,9 @@ def normalize_stat_column(col: str) -> str:
         'k/s': 'kills_per_set',
         'e': 'attack_errors',
         'ta': 'total_attacks',
+        'ta_recv': 'total_reception_attempts',  # TA in defensive stats means reception attempts
         'pct': 'hitting_pct',
+        'rec%': 'reception_pct',
         'a': 'assists',
         'a/s': 'assists_per_set',
         'sa': 'aces',
@@ -122,6 +232,7 @@ def normalize_stat_column(col: str) -> str:
         'dig': 'digs',
         'dig/s': 'digs_per_set',
         're': 'reception_errors',
+        're/s': 'reception_errors_per_set',
         'bs': 'block_solos',
         'ba': 'block_assists',
         'blk': 'total_blocks',
