@@ -48,7 +48,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        help="Output file base name (without extension). Default: d1_rosters_2025_with_stats_and_incoming"
+        help="Output file base name (without extension). Default: rosters_and_stats"
     )
     parser.add_argument(
         "--year",
@@ -65,7 +65,7 @@ def main():
     TEAMS = get_teams_with_year_urls(season_year)
     
     # Determine output file path
-    output_base = args.output if args.output else "d1_rosters_2025_with_stats_and_incoming"
+    output_base = args.output if args.output else "rosters_and_stats"
     output_csv = os.path.join(EXPORT_DIR, f"{output_base}.csv")
     
     # Determine which teams to scrape
