@@ -199,13 +199,54 @@ def get_available_stats_years(driver):
         return []
 
 
-def scrape_lsu_stats(driver, year=2025):
+def select_stat_category(driver, category='Individual'):
+    """
+    Click stat category button (Individual, Offensive, Defensive).
+    
+    Args:
+        driver: Selenium WebDriver instance
+        category: 'Individual', 'Offensive', or 'Defensive'
+    
+    Returns:
+        bool: True if button was clicked successfully
+    """
+    try:
+        print(f"Selecting stat category: {category}")
+        
+        # Scroll down to load the stat category buttons (they're lazy-loaded)
+        driver.execute_script("window.scrollTo(0, 800);")
+        time.sleep(2)
+        
+        # Find button by text content
+        button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, f"//button[contains(text(), '{category}')]"))
+        )
+        
+        # Scroll button into view
+        driver.execute_script("arguments[0].scrollIntoView(true);", button)
+        time.sleep(1)
+        
+        # Click the button
+        button.click()
+        print(f"✓ Clicked {category} button")
+        
+        # Wait for table to reload
+        time.sleep(3)
+        return True
+        
+    except Exception as e:
+        print(f"Warning: Could not click {category} button - {e}")
+        return False
+
+
+def scrape_lsu_stats(driver, year=2025, category='Individual'):
     """
     Scrape statistics from LSU volleyball stats page.
     
     Args:
         driver: Selenium WebDriver instance
         year: Season year to select (default: 2025)
+        category: Stat category - 'Individual', 'Offensive', or 'Defensive'
     
     Returns:
         list: Player stat dictionaries
@@ -233,6 +274,9 @@ def scrape_lsu_stats(driver, year=2025):
     except Exception as e:
         print(f"Warning: Could not select year - {e}")
         print("Continuing with default year...")
+    
+    # Select stat category (Individual/Offensive/Defensive)
+    select_stat_category(driver, category)
     
     try:
         # Wait for stats table to load
@@ -403,9 +447,10 @@ def main():
         if available_years:
             print(f"Available stats years: {', '.join(available_years)}")
         
-        # Scrape stats for current year (2025)
+        # Scrape stats for current year (2025) - Individual stats
         print("\n" + "="*60)
-        stats = scrape_lsu_stats(driver, year=2025)
+        print("Scraping Individual stats...")
+        stats = scrape_lsu_stats(driver, year=2025, category='Individual')
         
         if stats:
             print(f"\n✓ Successfully scraped {len(stats)} stat entries")
