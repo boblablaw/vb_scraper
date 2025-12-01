@@ -10,6 +10,7 @@ from .utils import (
     normalize_class,
     normalize_height,
     normalize_school_key,
+    extract_position_codes,
 )
 from .roster import parse_roster
 from .stats import build_stats_lookup, attach_stats_to_player
@@ -50,6 +51,9 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
 
         position_raw = p.get("position", "")
         p["position_raw"] = position_raw
+        # Extract normalized position codes (S, OH, RS, MB, DS)
+        position_codes = extract_position_codes(position_raw)
+        p["position_norm"] = "/".join(sorted(position_codes)) if position_codes else ""
 
         height_raw = p.get("height_raw", "")
         height_norm = normalize_height(height_raw)
@@ -65,6 +69,7 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
 
     for p in players:
         position_raw = p.get("position_raw", p.get("position", ""))
+        position_norm = p.get("position_norm", "")
 
         class_raw = p.get("class_raw", "")
         class_norm = p.get("class_norm", normalize_class(class_raw))
@@ -76,7 +81,7 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
             "team": team_name,
             "conference": conference,
             "name": p["name"],
-            "position": position_raw,
+            "position": position_norm,
             "class": class_norm,
             "height": height_norm,
         }
