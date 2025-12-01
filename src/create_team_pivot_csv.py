@@ -20,7 +20,7 @@ from scraper.utils import (
 )
 from scraper.coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
 from scraper.utils import fetch_html
-from logging_utils import get_logger
+from scraper.logging_utils import setup_logging, get_logger
 
 logger = get_logger(__name__)
 

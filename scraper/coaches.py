@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 from .utils import normalize_text
-from logging_utils import get_logger
+from .logging_utils import get_logger
 
 logger = get_logger(__name__)
 

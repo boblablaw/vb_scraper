@@ -122,10 +122,10 @@ class TestDependentModuleImports(unittest.TestCase):
     """Test that modules dependent on configuration data can import from settings."""
 
     def test_run_scraper_imports_teams(self):
-        """Test that run_scraper.py correctly imports TEAMS from settings."""
+        """Test that src/run_scraper.py correctly imports TEAMS from settings."""
         # Import the module (may fail if pandas/requests are missing)
         try:
-            import run_scraper
+            from src import run_scraper
         except ImportError as e:
             # Skip test if dependencies are missing
             if "pandas" in str(e) or "requests" in str(e):
@@ -188,10 +188,10 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(OUTGOING_TRANSFERS), 0)
 
     def test_team_pivot_imports_outgoing_transfers(self):
-        """Test that create_team_pivot_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
+        """Test that src/create_team_pivot_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
         # Import the module (this will work even if pandas is missing, as imports are at top)
         try:
-            import create_team_pivot_csv
+            from src import create_team_pivot_csv
         except ImportError as e:
             # If pandas or other dependencies are missing, that's okay for this test
             if "pandas" not in str(e):
@@ -205,9 +205,9 @@ class TestDependentModuleImports(unittest.TestCase):
         self.assertGreater(len(OUTGOING_TRANSFERS), 0)
 
     def test_export_transfers_imports_outgoing_transfers(self):
-        """Test that create_transfers_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
+        """Test that src/create_transfers_csv.py correctly imports OUTGOING_TRANSFERS from settings."""
         # Import the module
-        import create_transfers_csv
+        from src import create_transfers_csv
         
         # Verify the module can access OUTGOING_TRANSFERS
         from settings import OUTGOING_TRANSFERS

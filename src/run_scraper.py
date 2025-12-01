@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 from settings import TEAMS
 from scraper.rpi_lookup import build_rpi_lookup
 from scraper.team_analysis import analyze_team
-from logging_utils import setup_logging, get_logger
+from scraper.logging_utils import setup_logging, get_logger
 
 
 REQUEST_DELAY = 1.0

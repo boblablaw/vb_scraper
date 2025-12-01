@@ -13,7 +13,7 @@ from .utils import (
 )
 from .roster import parse_roster
 from .stats import build_stats_lookup, attach_stats_to_player
-from logging_utils import get_logger
+from .logging_utils import get_logger
 
 logger = get_logger(__name__)
 

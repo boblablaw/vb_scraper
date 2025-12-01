@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from bs4 import BeautifulSoup, Tag
 
 from .utils import normalize_text
-from logging_utils import get_logger
+from .logging_utils import get_logger
 
 logger = get_logger(__name__)
 

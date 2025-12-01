@@ -7,8 +7,48 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 This is a web scraper for Division 1 Women's Volleyball programs. It collects roster data, player statistics, coach information, incoming transfers, and RPI rankings from NCAA D1 volleyball team websites, then aggregates them into CSV exports for analysis.
 
 **Architecture:** The scraper follows a clean separation of concerns:
-- **Data Collection** (`run_scraper.py` + `scraper/`): Collects raw roster and stats data
-- **Analysis** (`create_team_pivot_csv.py`): Performs all analytical work (projections, transfers, coaches)
+- **Data Collection** (`src/run_scraper.py` + `scraper/`): Collects raw roster and stats data
+- **Analysis** (`src/create_team_pivot_csv.py`): Performs all analytical work (projections, transfers, coaches)
+
+**Project Structure:**
+```
+vb_scraper/
+├── src/                    # Main source code
+│   ├── run_scraper.py
+│   ├── create_team_pivot_csv.py
+│   ├── create_transfers_csv.py
+│   ├── merge_manual_rosters.py
+│   └── merge_manual_stats.py
+├── scraper/                # Core scraping modules
+│   ├── roster.py
+│   ├── stats.py
+│   ├── team_analysis.py
+│   ├── coaches.py
+│   ├── transfers.py
+│   ├── rpi_lookup.py
+│   ├── logging_utils.py
+│   └── utils.py
+├── settings/               # Configuration data
+│   ├── teams.py
+│   ├── transfers_config.py
+│   ├── rpi_team_name_aliases.py
+│   ├── incoming_players_data.py
+│   └── manual_rosters.csv
+├── tests/                  # Test suite
+│   ├── test_settings.py
+│   └── test_data/
+├── validation/             # Data validation tools
+│   ├── validate_data.py
+│   └── reports/
+├── scripts/                # Utility scripts
+│   └── find_missing_urls*.py
+├── docs/                   # Documentation
+│   ├── PROJECT_SUMMARY.md
+│   ├── KNOWN_LIMITATIONS.md
+│   ├── FUTURE_ENHANCEMENTS.md
+│   └── TEST_README.md
+└── exports/                # Output files
+```
 
 ## Common Commands
 
@@ -19,22 +59,22 @@ This is a web scraper for Division 1 Women's Volleyball programs. It collects ro
 source venv/bin/activate
 
 # 1. Run the main scraper (generates per-player data with stats)
-python run_scraper.py
+python -m src.run_scraper
 
 # Optional: Filter to specific teams
-python run_scraper.py --team "Brigham Young University" --team "Stanford University"
+python -m src.run_scraper --team "Brigham Young University" --team "Stanford University"
 
 # Optional: Use custom output filename
-python run_scraper.py --output my_custom_rosters_2025
+python -m src.run_scraper --output my_custom_rosters_2025
 
 # 2. (Optional) Merge manual roster data for JavaScript-rendered sites
-python merge_manual_rosters.py
+python -m src.merge_manual_rosters
 
 # 3. Generate team-level analysis and aggregations
-python create_team_pivot_csv.py
+python -m src.create_team_pivot_csv
 
 # 4. (Optional) Export transfer data separately
-python create_transfers_csv.py
+python -m src.create_transfers_csv
 
 # 5. (Optional) Validate data quality
 python validation/validate_data.py
@@ -64,8 +104,8 @@ All outputs are written to the `exports/` directory:
 
 ### Logs & Validation
 - `scraper.log` — Detailed execution log
-- `validation/validation_report_*.md` — Data quality validation reports
-- `validation/problem_teams_*.txt` — List of teams with data issues
+- `validation/reports/validation_report_*.md` — Data quality validation reports
+- `validation/reports/problem_teams_*.txt` — List of teams with data issues
 
 ## Architecture
 
@@ -78,7 +118,7 @@ All outputs are written to the `exports/` directory:
 
 settings/teams.py (347 D1 teams + URLs)
     ↓
-run_scraper.py (orchestrator)
+src/run_scraper.py (orchestrator)
     ├─ rpi_lookup.py (fetch RPI rankings)
     └─ For each team:
         team_analysis.py (SIMPLIFIED - data collection only)
@@ -102,7 +142,7 @@ exports/d1_rosters_2025_with_stats_and_incoming.csv
 
 settings/manual_rosters.csv (manually entered data)
     ↓
-merge_manual_rosters.py
+src/merge_manual_rosters.py
     ├─ Load scraped CSV
     ├─ Remove teams with manual data from scraped results
     ├─ Add manual roster entries
@@ -114,7 +154,7 @@ exports/d1_rosters_2025_with_stats_and_incoming.csv (updated)
 │ 3. POST-PROCESSING & EXPORTS                                            │
 └─────────────────────────────────────────────────────────────────────────┘
 
-create_team_pivot_csv.py (team-level analysis)
+src/create_team_pivot_csv.py (team-level analysis)
     ├─ Read scraped roster CSV
     ├─ Calculate positional flags from position codes
     ├─ Determine returning vs graduating players
@@ -128,7 +168,7 @@ create_team_pivot_csv.py (team-level analysis)
     ↓
 exports/d1_team_pivot_2025.csv
 
-create_transfers_csv.py
+src/create_transfers_csv.py
     └─ Export settings/transfers_config.py to CSV
     ↓
 exports/outgoing_transfers.csv
@@ -143,13 +183,13 @@ validation/validate_data.py
     ├─ Detect suspected non-players
     └─ Identify problem teams
     ↓
-validation/validation_report_*.md
-validation/problem_teams_*.txt
+validation/reports/validation_report_*.md
+validation/reports/problem_teams_*.txt
 ```
 
 ### Core Modules
 
-**`run_scraper.py`** — Main entry point. Iterates through all teams in `TEAMS`, calls `analyze_team()` for each, aggregates results, writes CSV with abbreviated column headers. Also calculates derived stats (D/S, Rec%) when not provided by source.
+**`src/run_scraper.py`** — Main entry point. Iterates through all teams in `TEAMS`, calls `analyze_team()` for each, aggregates results, writes CSV with abbreviated column headers. Also calculates derived stats (D/S, Rec%) when not provided by source.
 
 **`scraper/team_analysis.py`** — Simplified data collection module (111 lines). For each team:
 - Fetches and parses roster HTML
@@ -182,13 +222,13 @@ validation/problem_teams_*.txt
 - `incoming_players_data.py` — Raw text data of incoming players (freshmen and transfers) by conference
 - `manual_rosters.csv` — Manually-entered roster data for JavaScript-rendered sites that can't be scraped
 
-**`merge_manual_rosters.py`** — Manual roster merge script. For teams with JavaScript-rendered rosters:
+**`src/merge_manual_rosters.py`** — Manual roster merge script. For teams with JavaScript-rendered rosters:
 - Reads manual roster data from `settings/manual_rosters.csv`
 - Removes scraped data for teams with manual entries
 - Adds manual roster rows with auto-detected position flags
-- Writes merged data back to main export TSV
+- Writes merged data back to main export CSV
 
-**`create_team_pivot_csv.py`** — Team-level analysis script (414 lines). Reads the per-player CSV, performs all analytical work:
+**`src/create_team_pivot_csv.py`** — Team-level analysis script (414 lines). Reads the per-player CSV, performs all analytical work:
 - Calculates positional flags from position codes (S, OH, RS, MB, DS)
 - Determines returning vs graduating players from class years
 - Matches incoming players and transfers
@@ -198,7 +238,7 @@ validation/problem_teams_*.txt
 - Determines offense type (5-1 vs 6-2 based on assists >= 350)
 - Outputs team-level summaries with all analysis
 
-**`create_transfers_csv.py`** — Transfer data export utility. Exports `OUTGOING_TRANSFERS` from `settings/transfers_config.py` to CSV format
+**`src/create_transfers_csv.py`** — Transfer data export utility. Exports `OUTGOING_TRANSFERS` from `settings/transfers_config.py` to CSV format
 
 **`validation/validate_data.py`** — Data quality validation script. Analyzes scraped data for:
 - Missing or invalid field values (position, height, class)
@@ -208,7 +248,7 @@ validation/problem_teams_*.txt
 - Teams with data quality issues
 - Generates validation reports and problem team lists
 
-**`utils.py`** — Shared utilities:
+**`scraper/utils.py`** — Shared utilities:
 - Text normalization (`normalize_text`, `normalize_player_name`)
 - School name normalization for matching (`normalize_school_key`)
 - Height parsing (`normalize_height`)
@@ -216,11 +256,8 @@ validation/problem_teams_*.txt
 - Position code extraction (`extract_position_codes`: S, OH, RS, MB, DS)
 - Excel protection helpers (`excel_protect_record`, `excel_protect_phone`, `excel_unprotect`)
 
-**`logging_utils.py`** — Centralized logging setup. Logs to console and `exports/scraper.log`.
+**`scraper/logging_utils.py`** — Centralized logging configuration. Sets up console and file logging to `exports/scraper.log`
 
-**`labels.py`** — Formatting helpers for player labels in output (e.g., "Jane Doe (So)" for returning players).
-
-**`export_transfers.py`** — Utility to export `OUTGOING_TRANSFERS` to CSV.
 
 ### Key Design Patterns
 
@@ -252,7 +289,7 @@ validation/problem_teams_*.txt
 - Stats fields: All player stats with abbreviated names (MS, MP, SP, PTS, PTS/S, K, K/S, AE, TA, HIT%, A, A/S, SA, SA/S, SE, D, D/S, RE, TRE, Rec%, BS, BA, TB, B/S, BHE)
 - Note: No boolean flags, no projections, no coach data in scraper output
 
-**Team pivot dict** (from `create_team_pivot_csv.py`):
+**Team pivot dict** (from `src/create_team_pivot_csv.py`):
 - Core fields: `team`, `conference`, `rank`, `record`, `roster_url`, `stats_url`
 - Position analysis: `returning_setter_count`, `returning_setter_names`, `incoming_setter_count`, `incoming_setter_names`, `projected_setter_count`, `avg_setter_height` (same for pins, middles, defs)
 - Transfers: `outgoing_transfers`, `incoming_transfers`
@@ -316,7 +353,7 @@ Player Name - School Name - Position (Club)
 
 ## Logging
 
-Logging is configured in `logging_utils.py`. Default level is `INFO`. Logs go to both console and `exports/scraper.log`. Change level to `logging.DEBUG` in `run_scraper.py` for verbose output.
+Logging is configured in `scraper/logging_utils.py`. Default level is `INFO`. Logs go to both console and `exports/scraper.log`. Change level to `logging.DEBUG` in `src/run_scraper.py` for verbose output.
 
 ## Testing
 
@@ -326,12 +363,12 @@ The project includes unit tests for the settings package to verify configuration
 
 ```bash
 # Run all tests
-python test_settings.py
+python -m tests.test_settings
 ```
 
 ### Test Coverage
 
-The test suite (`test_settings.py`) verifies:
+The test suite (`tests/test_settings.py`) verifies:
 
 1. **Settings Package Imports** — All configuration data (TEAMS, OUTGOING_TRANSFERS, RPI_TEAM_NAME_ALIASES, RAW_INCOMING_TEXT) is correctly imported and accessible
 2. **Dependent Module Imports** — All modules can successfully import configuration data from the settings package
@@ -339,4 +376,4 @@ The test suite (`test_settings.py`) verifies:
 
 Tests are designed to work with or without optional dependencies (pandas, requests, beautifulsoup4). Tests requiring missing dependencies will be automatically skipped.
 
-See `TEST_README.md` for detailed test documentation.
+See `docs/TEST_README.md` for detailed test documentation.
