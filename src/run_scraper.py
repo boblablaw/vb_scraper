@@ -8,7 +8,7 @@ import time
 import os
 from typing import Any, Dict, List
 
-from settings import TEAMS
+from settings.teams_urls import get_teams_with_year_urls, get_season_year
 from scraper.rpi_lookup import build_rpi_lookup
 from scraper.team_analysis import analyze_team
 from scraper.logging_utils import setup_logging, get_logger
@@ -51,7 +51,19 @@ def main():
         type=str,
         help="Output file base name (without extension). Default: d1_rosters_2025_with_stats_and_incoming"
     )
+    parser.add_argument(
+        "--year",
+        type=int,
+        help="Season year for URLs (e.g., 2024, 2025). If not specified, uses current season based on date."
+    )
     args = parser.parse_args()
+    
+    # Determine season year
+    season_year = args.year if args.year else get_season_year()
+    logger.info(f"Using season year for URLs: {season_year}")
+    
+    # Get teams with year-specific URLs
+    TEAMS = get_teams_with_year_urls(season_year)
     
     # Determine output file path
     output_base = args.output if args.output else "d1_rosters_2025_with_stats_and_incoming"
