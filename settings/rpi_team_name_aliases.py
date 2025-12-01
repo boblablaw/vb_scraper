@@ -282,7 +282,7 @@ RPI_TEAM_NAME_ALIASES = {
     'Prairie View A&M University': 'Prairie View',
     'Queens University of Charlotte': 'Queens (NC)',
     'Saint Francis University (Saint Francis (PA))[n]': 'Saint Francis',
-    "Saint Mary's College of California": 'Saint Mary''s (CA)',
+    "Saint Mary's (CA)": "Saint Mary's College of California",
     'Sam Houston State University': 'Sam Houston',
     'Seattle University': 'Seattle U',
     'Southeast Missouri State University': 'Southeast Mo. St.',

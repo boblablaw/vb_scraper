@@ -2,6 +2,7 @@
 # Reads simplified scraper output and calculates team-level aggregations
 # including positional analysis, transfers, incoming players, coaches, and offense type.
 
+import argparse
 import csv
 import re
 import os
@@ -9,7 +10,8 @@ from typing import Any, Dict, List, Set
 
 import pandas as pd
 
-from settings import TEAMS, OUTGOING_TRANSFERS
+from settings.teams import TEAMS
+from settings.transfers_config import OUTGOING_TRANSFERS
 from scraper.utils import (
     normalize_school_key,
     normalize_player_name,
@@ -121,11 +123,14 @@ def to_int_safe(val: Any) -> int:
         return 0
 
 
-def main():
-    logger.info("Reading simplified scraper output: %s", INPUT_CSV)
+def main(input_csv=None, output_csv=None):
+    input_csv = input_csv or INPUT_CSV
+    output_csv = output_csv or OUTPUT_CSV
+    
+    logger.info("Reading simplified scraper output: %s", input_csv)
     
     # Read the simplified CSV
-    df = pd.read_csv(INPUT_CSV)
+    df = pd.read_csv(input_csv)
     
     # Normalize column names (friendly headers -> internal)
     col_map = {
@@ -396,11 +401,11 @@ def main():
         results.append(result)
     
     # Write output
-    logger.info("Writing team pivot to: %s", OUTPUT_CSV)
+    logger.info("Writing team pivot to: %s", output_csv)
     
     if results:
         fieldnames = list(results[0].keys())
-        with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+        with open(output_csv, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
@@ -411,4 +416,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Generate team-level pivot analysis from scraper output")
+    parser.add_argument(
+        "--input",
+        default=INPUT_CSV,
+        help=f"Input CSV file (default: {INPUT_CSV})"
+    )
+    parser.add_argument(
+        "--output",
+        default=OUTPUT_CSV,
+        help=f"Output CSV file (default: {OUTPUT_CSV})"
+    )
+    args = parser.parse_args()
+    
+    setup_logging()
+    main(input_csv=args.input, output_csv=args.output)
