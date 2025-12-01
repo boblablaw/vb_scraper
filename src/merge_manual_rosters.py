@@ -23,15 +23,9 @@ import pandas as pd
 from pathlib import Path
 from scraper.utils import (
     normalize_class, 
-    class_next_year, 
-    is_graduating,
     normalize_height,
-    extract_position_codes,
-    normalize_player_name,
     normalize_school_key
 )
-from scraper.incoming_players import get_incoming_players
-from settings.transfers_config import OUTGOING_TRANSFERS
 
 
 def load_manual_rosters(manual_file: str = 'settings/manual_rosters.csv') -> pd.DataFrame:
@@ -77,11 +71,6 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
     # Keep scraped data for teams with manual entries, but update/add players
     print(f'Processing {len(manual_teams)} teams with manual data (will merge with scraped data)')
     
-    # Load supplementary data
-    print('Loading incoming players data...')
-    incoming_players = get_incoming_players()
-    
-    print('Loading transfers data...')
     print()
     
     # Get conference info and URLs from settings
@@ -107,38 +96,8 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
             class_raw = str(row['Class']) if pd.notna(row['Class']) else ''
             height_raw = str(row['Height']) if pd.notna(row['Height']) else ''
             
-            position_normalized = position_raw
             class_normalized = normalize_class(class_raw)
             height_normalized = normalize_height(height_raw)
-            class_next = class_next_year(class_normalized)
-            
-            # Extract position codes
-            position_codes = extract_position_codes(position_raw)
-            # Do NOT count S/DS as a setter
-            is_setter = 1 if ('S' in position_codes and 'DS' not in position_codes) else 0
-            is_pin = 1 if ('OH' in position_codes or 'RS' in position_codes) else 0
-            is_middle = 1 if 'MB' in position_codes else 0
-            is_ds = 1 if 'DS' in position_codes else 0
-            
-            # Check if graduating
-            is_grad = 1 if is_graduating(class_normalized) else 0
-            
-            # Check for outgoing transfer
-            norm_name = normalize_player_name(name)
-            is_outgoing = 0
-            for transfer in OUTGOING_TRANSFERS:
-                if (normalize_player_name(transfer['name']) == norm_name and
-                    normalize_school_key(transfer['old_team']) == norm_school):
-                    is_outgoing = 1
-                    break
-            
-            # Check for incoming transfer
-            is_incoming = 0
-            for inc in incoming_players:
-                if (normalize_player_name(inc['name']) == norm_name and
-                    normalize_school_key(inc['school']) == norm_school):
-                    is_incoming = 1
-                    break
             
             # Try to find existing player in scraped data
             existing_mask = (scraped_df['Team'] == team) & (scraped_df['Name'] == name)
@@ -147,20 +106,9 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
             if len(existing_player) > 0:
                 # Update existing player - preserve stats, update roster fields
                 idx = existing_player.index[0]
-                scraped_df.at[idx, 'Position Raw'] = position_raw
-                scraped_df.at[idx, 'Position'] = position_normalized
-                scraped_df.at[idx, 'Class Raw'] = class_raw
+                scraped_df.at[idx, 'Position'] = position_raw
                 scraped_df.at[idx, 'Class'] = class_normalized
-                scraped_df.at[idx, 'Class Next Year'] = class_next
-                scraped_df.at[idx, 'Height Raw'] = height_raw
                 scraped_df.at[idx, 'Height'] = height_normalized
-                scraped_df.at[idx, 'Is Setter'] = is_setter
-                scraped_df.at[idx, 'Is Pin Hitter'] = is_pin
-                scraped_df.at[idx, 'Is Middle Blocker'] = is_middle
-                scraped_df.at[idx, 'Is Def Specialist'] = is_ds
-                scraped_df.at[idx, 'Is Graduating'] = is_grad
-                scraped_df.at[idx, 'Is Outgoing Transfer'] = is_outgoing
-                scraped_df.at[idx, 'Is Incoming Transfer'] = is_incoming
                 manual_updates.append(('updated', team, name))
             else:
                 # Add new player - create row with all scraped columns
@@ -168,20 +116,9 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
                     'Team': team,
                     'Conference': team_data.get('conference', ''),
                     'Name': name,
-                    'Position Raw': position_raw,
-                    'Position': position_normalized,
-                    'Class Raw': class_raw,
+                    'Position': position_raw,
                     'Class': class_normalized,
-                    'Class Next Year': class_next,
-                    'Height Raw': height_raw,
                     'Height': height_normalized,
-                    'Is Setter': is_setter,
-                    'Is Pin Hitter': is_pin,
-                    'Is Middle Blocker': is_middle,
-                    'Is Def Specialist': is_ds,
-                    'Is Graduating': is_grad,
-                    'Is Outgoing Transfer': is_outgoing,
-                    'Is Incoming Transfer': is_incoming,
                 }
                 
                 # Add empty columns for all other fields (stats, etc.)
@@ -192,111 +129,6 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
                 # Append to scraped_df
                 scraped_df = pd.concat([scraped_df, pd.DataFrame([new_row])], ignore_index=True)
                 manual_updates.append(('added', team, name))
-    
-    # Now recalculate projected counts for teams with manual data
-    # (after all manual updates/additions are done)
-    print()
-    print('Recalculating projected counts for teams with manual data...')
-    
-    for team in sorted(manual_teams):
-        norm_school = normalize_school_key(team)
-        
-        # Get all players for this team from updated scraped_df
-        team_rows = scraped_df[scraped_df['Team'] == team]
-        
-        if len(team_rows) == 0:
-            continue
-        
-        # Calculate returning players (not graduating, not transferring out)
-        returning_mask = (team_rows['Is Graduating'] != 1) & (team_rows['Is Outgoing Transfer'] != 1)
-        returning_players = team_rows[returning_mask]
-        
-        returning_setters = returning_players[returning_players['Is Setter'] == 1]
-        returning_pins = returning_players[returning_players['Is Pin Hitter'] == 1]
-        returning_middles = returning_players[returning_players['Is Middle Blocker'] == 1]
-        returning_defs = returning_players[returning_players['Is Def Specialist'] == 1]
-        
-        # Get incoming players for this team from incoming_players list
-        team_incoming = [p for p in incoming_players if normalize_school_key(p['school']) == norm_school]
-        
-        # Categorize incoming players by position
-        incoming_setters = []
-        incoming_pins = []
-        incoming_middles = []
-        incoming_defs = []
-        for inc in team_incoming:
-            pos_codes = extract_position_codes(inc.get('position', ''))
-            # Same S/DS rule
-            if 'S' in pos_codes and 'DS' not in pos_codes:
-                incoming_setters.append(inc)
-            if 'OH' in pos_codes or 'RS' in pos_codes:
-                incoming_pins.append(inc)
-            if 'MB' in pos_codes:
-                incoming_middles.append(inc)
-            if 'DS' in pos_codes:
-                incoming_defs.append(inc)
-        
-        # Calculate counts
-        returning_setter_count = len(returning_setters)
-        returning_pin_count = len(returning_pins)
-        returning_mb_count = len(returning_middles)
-        returning_def_count = len(returning_defs)
-        
-        incoming_setter_count = len(incoming_setters)
-        incoming_pin_count = len(incoming_pins)
-        incoming_mb_count = len(incoming_middles)
-        incoming_def_count = len(incoming_defs)
-        
-        projected_setter_count = returning_setter_count + incoming_setter_count
-        projected_pin_count = returning_pin_count + incoming_pin_count
-        projected_mb_count = returning_mb_count + incoming_mb_count
-        projected_def_count = returning_def_count + incoming_def_count
-        
-        # Format names for display
-        def format_player_label(row):
-            name = row['Name']
-            class_abbr = row.get('Class Next Year', '') or row.get('Class', '')
-            return f"{name} ({class_abbr})" if class_abbr else name
-        
-        def format_incoming_label(p):
-            return p['name']
-        
-        returning_setter_names = ', '.join(format_player_label(row) for _, row in returning_setters.iterrows())
-        returning_pin_names = ', '.join(format_player_label(row) for _, row in returning_pins.iterrows())
-        returning_mb_names = ', '.join(format_player_label(row) for _, row in returning_middles.iterrows())
-        returning_def_names = ', '.join(format_player_label(row) for _, row in returning_defs.iterrows())
-        
-        incoming_setter_names = ', '.join(format_incoming_label(p) for p in incoming_setters)
-        incoming_pin_names = ', '.join(format_incoming_label(p) for p in incoming_pins)
-        incoming_mb_names = ', '.join(format_incoming_label(p) for p in incoming_middles)
-        incoming_def_names = ', '.join(format_incoming_label(p) for p in incoming_defs)
-        
-        # Update all rows for this team with calculated counts and names
-        team_mask = scraped_df['Team'] == team
-        scraped_df.loc[team_mask, 'Returning Setter Count'] = returning_setter_count
-        scraped_df.loc[team_mask, 'Returning Pin Hitter Count'] = returning_pin_count
-        scraped_df.loc[team_mask, 'Returning Middle Blocker Count'] = returning_mb_count
-        scraped_df.loc[team_mask, 'Returning Def Specialist Count'] = returning_def_count
-        
-        scraped_df.loc[team_mask, 'Incoming Setter Count'] = incoming_setter_count
-        scraped_df.loc[team_mask, 'Incoming Pin Hitter Count'] = incoming_pin_count
-        scraped_df.loc[team_mask, 'Incoming Middle Blocker Count'] = incoming_mb_count
-        scraped_df.loc[team_mask, 'Incoming Def Specialist Count'] = incoming_def_count
-        
-        scraped_df.loc[team_mask, 'Projected Setter Count'] = projected_setter_count
-        scraped_df.loc[team_mask, 'Projected Pin Hitter Count'] = projected_pin_count
-        scraped_df.loc[team_mask, 'Projected Middle Blocker Count'] = projected_mb_count
-        scraped_df.loc[team_mask, 'Projected Def Specialist Count'] = projected_def_count
-        
-        scraped_df.loc[team_mask, 'Returning Setters'] = returning_setter_names
-        scraped_df.loc[team_mask, 'Returning Pins'] = returning_pin_names
-        scraped_df.loc[team_mask, 'Returning Middles'] = returning_mb_names
-        scraped_df.loc[team_mask, 'Returning Defs'] = returning_def_names
-        
-        scraped_df.loc[team_mask, 'Incoming Setters'] = incoming_setter_names
-        scraped_df.loc[team_mask, 'Incoming Pins'] = incoming_pin_names
-        scraped_df.loc[team_mask, 'Incoming Middles'] = incoming_mb_names
-        scraped_df.loc[team_mask, 'Incoming Defs'] = incoming_def_names
     
     merged_df = scraped_df
     
