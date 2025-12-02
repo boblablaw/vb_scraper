@@ -272,6 +272,32 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
     if not stats_url:
         return {}
 
+    def expand_wmt_urls(urls):
+        """If a URL points to wmt.games, try query variants for offense/defense."""
+        expanded: List[str] = []
+        for u in urls:
+            if not u:
+                continue
+            if "wmt.games" in u:
+                expanded.extend(
+                    [
+                        u,
+                        f"{u}?main=Individual&overall=Offensive",
+                        f"{u}?main=Individual&overall=Defensive",
+                        f"{u}?main=Individual",
+                    ]
+                )
+            else:
+                expanded.append(u)
+        # Deduplicate while preserving order
+        seen = set()
+        uniq = []
+        for u in expanded:
+            if u not in seen:
+                uniq.append(u)
+                seen.add(u)
+        return uniq
+
     def try_tables(urls):
         for u in urls:
             if not u:
@@ -285,7 +311,7 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                 logger.debug("Stats fetch failed for %s: %s", u, e)
         return None
 
-    tables = try_tables([stats_url])
+    tables = try_tables(expand_wmt_urls([stats_url]))
 
     # If failed, try stripping trailing year segment
     stats_page_candidates: List[str] = [stats_url]
@@ -297,7 +323,7 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
         stats_page_candidates.append(base)
 
     if not tables:
-        tables = try_tables(stats_page_candidates[1:])
+        tables = try_tables(expand_wmt_urls(stats_page_candidates[1:]))
 
     # If still nothing, try to discover iframe src (WMT embeds) across candidate pages
     if not tables:
@@ -340,7 +366,7 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                 logger.debug("Iframe stats discovery failed for %s: %s", page, e)
 
         if expanded_candidates:
-            tables = try_tables(expanded_candidates)
+            tables = try_tables(expand_wmt_urls(expanded_candidates))
 
     if not tables:
         logger.info("Stats not available for %s - continuing without stats", stats_url)
