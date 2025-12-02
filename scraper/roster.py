@@ -233,6 +233,14 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
             or card.find("a", href=True)
         )
         name = _clean(name_tag.get_text()) if name_tag else ""
+        profile_url = ""
+        if name_tag:
+            if name_tag.name == "a" and name_tag.get("href"):
+                profile_url = name_tag.get("href")
+            else:
+                link = name_tag.find("a", href=True)
+                if link and link.get("href"):
+                    profile_url = link.get("href")
 
         # Position
         pos_tag = (
@@ -273,6 +281,7 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
                 "position": position,
                 "class_raw": class_raw,
                 "height_raw": height_raw,
+                "profile_url": profile_url,
             }
         )
 
@@ -336,7 +345,13 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     return texts[idx]
                 return ""
 
-            name = get(name_idx)
+            name_cell = cells[name_idx] if name_idx is not None and name_idx < len(cells) else None
+            name = normalize_text(name_cell.get_text()) if name_cell else ""
+            profile_url = ""
+            if name_cell:
+                link = name_cell.find("a", href=True)
+                if link and link.get("href"):
+                    profile_url = link.get("href")
             position = get(pos_idx)
             class_raw = get(class_idx)
             height_raw = get(height_idx)
@@ -371,8 +386,9 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     "position": position,
                     "class_raw": class_raw,
                     "height_raw": height_raw,
-            }
-        )
+                    "profile_url": profile_url,
+                }
+            )
 
     players = filter_impact_players(players)
 
@@ -1155,6 +1171,7 @@ def parse_generic_table_roster(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     "position": position,
                     "class_raw": class_raw,
                     "height_raw": height_raw,
+                    "profile_url": profile_url,
                 }
             )
 
