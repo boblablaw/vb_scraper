@@ -56,6 +56,7 @@ python scripts/export_incoming_players.py --year 2025
 
 # Validate data quality
 python validation/validate_data.py
+# Report is written to validation/reports/validation_report_<timestamp>.md
 ```
 
 ## Project Structure
@@ -102,6 +103,7 @@ All outputs are written to `exports/`:
 - **`d1_team_pivot_2025.csv`** — Team-level aggregations with positional analysis, transfers, coaches, and projected rosters
 - **`outgoing_transfers.csv`** — Transfer data export
 - **`scraper.log`** — Detailed execution log
+- **Validation reports** — Written to `validation/reports/validation_report_<timestamp>.md`
 
 ## Architecture
 
