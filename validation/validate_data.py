@@ -516,7 +516,7 @@ class DataValidator:
     def generate_report(self):
         """Generate comprehensive validation report."""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        report_path = f"validation/validation_report_{timestamp}.md"
+        report_path = f"validation/reports/validation_report_{timestamp}.md"
         os.makedirs(os.path.dirname(report_path), exist_ok=True)
         with open(report_path, 'w') as f:
             f.write("# Data Validation Report\n\n")
