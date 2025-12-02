@@ -35,6 +35,10 @@ ENV/
 # Exports
 exports/
 
+# Data/fixtures
+fixtures/
+tempfiles/
+
 # Environment variables
 .env
 .env.local
