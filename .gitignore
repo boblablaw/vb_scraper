@@ -38,6 +38,7 @@ exports/
 # Data/fixtures
 fixtures/
 tempfiles/
+validation/reports/
 
 # Environment variables
 .env
