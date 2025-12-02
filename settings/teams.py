@@ -1398,7 +1398,7 @@ TEAMS = [
         "stats_url": "https://liusharks.com/sports/womens-volleyball/stats/",
     },
     {
-        "team": "Mercyhurst University[c]",
+        "team": "Mercyhurst University",
         "conference": "NEC",
         "url": "https://mercyhurst.edu/athletics/womens-volleyball",
         "stats_url": "https://mercyhurst.edu/sports/womens-volleyball/stats/",

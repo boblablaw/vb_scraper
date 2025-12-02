@@ -205,11 +205,13 @@ def clean_player_name(raw_name: str) -> str:
 
 
 def normalize_stat_column(col: str) -> str:
-    """
-    Normalize stat column names to match main export format.
+    """Normalize stat column names to match main export format.
+
+    Extended to handle NCAA Livestats PDF exports where total blocks appear as
+    "TOT/S" (we treat this as "total blocks" to align with existing CSVs).
     """
     col = col.strip().lower()
-    
+
     # Map to internal stat names
     mapping = {
         'sp': 'sets_played',
@@ -235,12 +237,14 @@ def normalize_stat_column(col: str) -> str:
         're/s': 'reception_errors_per_set',
         'bs': 'block_solos',
         'ba': 'block_assists',
+        # In NCAA PDFs this appears as "TOT/S"; treat as total blocks
         'blk': 'total_blocks',
+        'tot/s': 'total_blocks',
         'blk/s': 'blocks_per_set',
         'be': 'ball_handling_errors',
         'bhe': 'ball_handling_errors',
     }
-    
+
     return mapping.get(col, col)
 
 
