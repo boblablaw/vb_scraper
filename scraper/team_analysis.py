@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from urllib.parse import urlsplit, urlunsplit
 
 from settings import RPI_TEAM_NAME_ALIASES
+import requests
+import re
 from .utils import (
     fetch_html,
     normalize_player_name,
@@ -19,6 +22,23 @@ from .logging_utils import get_logger
 logger = get_logger(__name__)
 
 
+def strip_year_from_url(url: str) -> str:
+    """
+    Remove trailing /<year> segment from a URL path, preserving query string.
+    Handles patterns like /roster/2025 or /roster/2025/?view=table.
+    """
+    if not url:
+        return url
+    parts = urlsplit(url)
+    segments = parts.path.rstrip("/").split("/")
+    if segments and re.fullmatch(r"\d{4}", segments[-1]):
+        segments = segments[:-1]
+        new_path = "/".join(s for s in segments if s)
+        if parts.path.startswith("/"):
+            new_path = "/" + new_path
+        return urlunsplit((parts.scheme, parts.netloc, new_path, parts.query, parts.fragment))
+    return url
+
 def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]] | None = None) -> List[Dict[str, Any]]:
     team_name = team_info["team"]
     conference = team_info.get("conference", "")
@@ -27,14 +47,70 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
 
     logger.info("Analyzing team: %s", team_name)
 
-    # Roster HTML
+    original_roster_url = roster_url
+    fallback_used = False
+
+    # Roster HTML (with fallback if year-appended URL 404s)
     try:
         roster_html = fetch_html(roster_url)
+    except requests.HTTPError as e:
+        status = getattr(e.response, "status_code", None)
+        if status == 404:
+            # If URL ends with a year segment, try stripping it
+            fallback_url = strip_year_from_url(roster_url)
+            if fallback_url != roster_url:
+                logger.warning(
+                    "Roster 404 for %s, retrying without year: %s -> %s",
+                    team_name,
+                    roster_url,
+                    fallback_url,
+                )
+                try:
+                    roster_html = fetch_html(fallback_url)
+                    roster_url = fallback_url  # keep for logging/debug
+                    fallback_used = True
+                except Exception as e2:
+                    logger.error(
+                        "Fallback roster fetch failed for %s (%s): %s",
+                        team_name,
+                        fallback_url,
+                        e2,
+                    )
+                    return []
+            else:
+                logger.error("ERROR fetching roster for %s: %s", team_name, e)
+                return []
+        else:
+            logger.error("ERROR fetching roster for %s: %s", team_name, e)
+            return []
     except Exception as e:
         logger.error("ERROR fetching roster for %s: %s", team_name, e)
         return []
 
     players = parse_roster(roster_html, roster_url)
+
+    # If nothing parsed and URL had a year suffix, try once more without it
+    if not players and not fallback_used:
+        fallback_url = strip_year_from_url(original_roster_url)
+        if fallback_url != original_roster_url:
+            logger.warning(
+                "No players parsed for %s; retrying without year: %s -> %s",
+                team_name,
+                original_roster_url,
+                fallback_url,
+            )
+            try:
+                roster_html = fetch_html(fallback_url)
+                players = parse_roster(roster_html, fallback_url)
+            except Exception as e:
+                logger.error(
+                    "Fallback roster parse failed for %s (%s): %s",
+                    team_name,
+                    fallback_url,
+                    e,
+                )
+                return []
+
     if not players:
         logger.warning("No players parsed for team %s from %s", team_name, roster_url)
         return []
