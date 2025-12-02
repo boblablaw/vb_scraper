@@ -305,14 +305,33 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
             soup = BeautifulSoup(resp.text, "html.parser")
             iframe = soup.find("iframe")
             iframe_src = iframe.get("src") if iframe else None
+            candidate_urls = []
             if iframe_src:
-                base_iframe = urljoin(stats_url, iframe_src)
-                candidates = [
-                    base_iframe,
-                    f"{base_iframe}?main=Individual&overall=Offensive",
-                    f"{base_iframe}?main=Individual&overall=Defensive",
-                ]
-                tables = try_tables(candidates)
+                candidate_urls.append(urljoin(stats_url, iframe_src))
+
+            # Also scan for any wmt.games URLs in the page (iframe/script/etc.)
+            for tag in soup.find_all(["iframe", "script", "link", "a"]):
+                for attr in ("src", "href"):
+                    val = tag.get(attr)
+                    if val and "wmt.games" in val:
+                        candidate_urls.append(urljoin(stats_url, val))
+
+            # Deduplicate while preserving order
+            seen = set()
+            unique_candidates = []
+            for u in candidate_urls:
+                if u not in seen:
+                    unique_candidates.append(u)
+                    seen.add(u)
+
+            # Append offense/defense query variants
+            expanded_candidates = []
+            for base_iframe in unique_candidates:
+                expanded_candidates.append(base_iframe)
+                expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Offensive")
+                expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Defensive")
+
+            tables = try_tables(expanded_candidates)
         except Exception as e:
             logger.debug("Iframe stats discovery failed for %s: %s", stats_url, e)
 
