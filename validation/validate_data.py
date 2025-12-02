@@ -27,7 +27,8 @@ from settings import TEAMS
 # Validation rules
 VALID_POSITIONS = {'S', 'OH', 'RS', 'MB', 'DS', 'L'}
 VALID_CLASSES = {'Fr', 'So', 'Jr', 'Sr', 'R-Fr', 'R-So', 'R-Jr', 'R-Sr', 'Gr', 'Fifth'}
-HEIGHT_PATTERN = re.compile(r'^[45]-\d{1,2}$|^[56]\'\s*\d{1,2}"?$')
+# Accept dash or apostrophe heights for 4–7 feet (e.g., 6-1, 6'1")
+HEIGHT_PATTERN = re.compile(r'^[4-7]-\d{1,2}$|^[4-7]\'\s*\d{1,2}"?$')
 NON_PLAYER_KEYWORDS = [
     'coach', 'assistant', 'director', 'coordinator', 'manager', 
     'trainer', 'admin', 'staff', 'volunteer', 'graduate assistant'
