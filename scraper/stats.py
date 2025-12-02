@@ -288,52 +288,59 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
     tables = try_tables([stats_url])
 
     # If failed, try stripping trailing year segment
-    if not tables:
-        if stats_url.endswith("/2025"):
-            base = stats_url[:-5]
-            tables = try_tables([base + "/2024", base])
-        elif stats_url.endswith("/2024"):
-            base = stats_url[:-5]
-            tables = try_tables([base])
+    stats_page_candidates: List[str] = [stats_url]
+    if stats_url.endswith("/2025"):
+        base = stats_url[:-5]
+        stats_page_candidates.extend([base + "/2024", base])
+    elif stats_url.endswith("/2024"):
+        base = stats_url[:-5]
+        stats_page_candidates.append(base)
 
-    # If still nothing, try to discover iframe src (WMT embeds) and append offense/defense params
     if not tables:
-        try:
-            logger.info("Attempting iframe stats discovery from %s", stats_url)
-            resp = requests.get(stats_url, timeout=30)
+        tables = try_tables(stats_page_candidates[1:])
+
+    # If still nothing, try to discover iframe src (WMT embeds) across candidate pages
+    if not tables:
+        def discover_iframe_urls(page_url: str) -> List[str]:
+            found: List[str] = []
+            resp = requests.get(page_url, timeout=30)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             iframe = soup.find("iframe")
             iframe_src = iframe.get("src") if iframe else None
-            candidate_urls = []
             if iframe_src:
-                candidate_urls.append(urljoin(stats_url, iframe_src))
-
-            # Also scan for any wmt.games URLs in the page (iframe/script/etc.)
+                found.append(urljoin(page_url, iframe_src))
             for tag in soup.find_all(["iframe", "script", "link", "a"]):
                 for attr in ("src", "href"):
                     val = tag.get(attr)
                     if val and "wmt.games" in val:
-                        candidate_urls.append(urljoin(stats_url, val))
-
+                        found.append(urljoin(page_url, val))
             # Deduplicate while preserving order
             seen = set()
-            unique_candidates = []
-            for u in candidate_urls:
+            uniq = []
+            for u in found:
                 if u not in seen:
-                    unique_candidates.append(u)
+                    uniq.append(u)
                     seen.add(u)
+            return uniq
 
-            # Append offense/defense query variants
-            expanded_candidates = []
-            for base_iframe in unique_candidates:
-                expanded_candidates.append(base_iframe)
-                expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Offensive")
-                expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Defensive")
+        expanded_candidates: List[str] = []
+        for page in stats_page_candidates:
+            try:
+                logger.info("Attempting iframe stats discovery from %s", page)
+                for base_iframe in discover_iframe_urls(page):
+                    expanded_candidates.append(base_iframe)
+                    expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Offensive")
+                    expanded_candidates.append(f"{base_iframe}?main=Individual&overall=Defensive")
+            except Exception as e:
+                logger.debug("Iframe stats discovery failed for %s: %s", page, e)
 
+        if expanded_candidates:
             tables = try_tables(expanded_candidates)
-        except Exception as e:
-            logger.debug("Iframe stats discovery failed for %s: %s", stats_url, e)
+
+    if not tables:
+        logger.info("Stats not available for %s - continuing without stats", stats_url)
+        return {}
 
     if not tables:
         logger.info("Stats not available for %s - continuing without stats", stats_url)
