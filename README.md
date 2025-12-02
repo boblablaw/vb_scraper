@@ -89,6 +89,8 @@ vb_scraper/
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation
 ├── validation/             # Data validation tools
+│   ├── validate_data.py               # Validation runner
+│   └── reports/                      # Generated validation reports
 ├── scripts/                # Utility scripts
 │   ├── export_incoming_players.py     # Export incoming players to CSV
 │   └── parse_ncaa_pdf_stats.py        # Parse NCAA PDF box scores to stats CSV
