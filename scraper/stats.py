@@ -315,6 +315,10 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                     val = tag.get(attr)
                     if val and "wmt.games" in val:
                         found.append(urljoin(page_url, val))
+            # Also regex-scan the full HTML for wmt.games URLs in case they are embedded in scripts
+            import re
+            for m in re.findall(r"https?://wmt\\.games[^\"'\\s>]+", resp.text):
+                found.append(urljoin(page_url, m))
             # Deduplicate while preserving order
             seen = set()
             uniq = []
