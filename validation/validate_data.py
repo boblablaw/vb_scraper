@@ -13,6 +13,7 @@ Validates:
 
 import re
 import os
+import argparse
 from typing import Dict, List, Tuple, Set
 from collections import defaultdict, Counter
 import pandas as pd
@@ -63,12 +64,21 @@ class DataValidator:
         
         if not missing_pos.empty:
             print(f"⚠️  {len(missing_pos)} players missing position")
-            for _, row in missing_pos.head(20).iterrows():
-                self.issues['missing_position'].append({
-                    'team': row['Team'],
-                    'name': row['Name'],
-                    'position_raw': row.get('Position Raw', '')
-                })
+            teams_missing = missing_pos.groupby('Team').size().sort_values(ascending=False)
+
+            print("\nTeams with most missing positions:")
+            for team, count in teams_missing.head(10).items():
+                print(f"  {team}: {count}")
+
+            # Track all teams with missing positions so they appear in problem_teams
+            for team, count in teams_missing.items():
+                self.team_issues[team].append(f"Missing {count} positions")
+
+            # Keep specific players for the report
+            cols = [c for c in ['Team', 'Name', 'Position Raw'] if c in missing_pos.columns]
+            self.issues['missing_position_players'] = missing_pos[cols].to_dict('records')
+        else:
+            print("✓ No players missing positions")
         
         # Check position format
         invalid_positions = []
@@ -168,7 +178,13 @@ class DataValidator:
             print(f"\nTeams with most missing heights:")
             for team, count in teams_missing.head(10).items():
                 print(f"  {team}: {count}")
+
+            # Track every team with any missing heights (not just top 10) so they appear in problem_teams
+            for team, count in teams_missing.items():
                 self.team_issues[team].append(f"Missing {count} heights")
+
+            # Keep a trimmed list of specific players missing heights for the report
+            self.issues['missing_height_players'] = missing_height[['Team', 'Name']].to_dict('records')
         
         # Check height format
         invalid_heights = []
@@ -236,6 +252,20 @@ class DataValidator:
         self.stats['missing_class'] = len(missing_class)
         
         print(f"Missing class: {len(missing_class)} ({len(missing_class)/len(self.df)*100:.1f}%)")
+
+        if not missing_class.empty:
+            teams_missing = missing_class.groupby('Team').size().sort_values(ascending=False)
+            print("\nTeams with most missing classes:")
+            for team, count in teams_missing.head(10).items():
+                print(f"  {team}: {count}")
+
+            # Track all teams with missing classes so they appear in problem_teams
+            for team, count in teams_missing.items():
+                self.team_issues[team].append(f"Missing {count} classes")
+
+            # Keep specific players for the report
+            cols = [c for c in ['Team', 'Name', 'Class Raw'] if c in missing_class.columns]
+            self.issues['missing_class_players'] = missing_class[cols].to_dict('records')
         
         # Check for players with raw class but no normalized class (normalization failed)
         failed_normalization = []
@@ -512,6 +542,40 @@ class DataValidator:
             f.write(f"- Suspected non-players: {self.stats['suspected_non_players']}\n")
             f.write(f"- Duplicate players: {self.stats['duplicate_players']}\n")
             f.write(f"- Teams with issues: {self.stats['teams_with_issues']}\n\n")
+
+            if self.issues.get('missing_position_players'):
+                f.write("## Players Missing Positions\n\n")
+                missing_players = self.issues['missing_position_players']
+                max_list = 150
+                for item in missing_players[:max_list]:
+                    pos_raw = item.get('Position Raw', '')
+                    extra = f" (raw: {pos_raw})" if pos_raw else ""
+                    f.write(f"- **{item['Team']}**: {item['Name']}{extra}\n")
+                if len(missing_players) > max_list:
+                    f.write(f"- ... and {len(missing_players) - max_list} more\n")
+                f.write("\n")
+
+            if self.issues.get('missing_class_players'):
+                f.write("## Players Missing Classes\n\n")
+                missing_players = self.issues['missing_class_players']
+                max_list = 150
+                for item in missing_players[:max_list]:
+                    cls_raw = item.get('Class Raw', '')
+                    extra = f" (raw: {cls_raw})" if cls_raw else ""
+                    f.write(f"- **{item['Team']}**: {item['Name']}{extra}\n")
+                if len(missing_players) > max_list:
+                    f.write(f"- ... and {len(missing_players) - max_list} more\n")
+                f.write("\n")
+
+            if self.issues.get('missing_height_players'):
+                f.write("## Players Missing Heights\n\n")
+                missing_players = self.issues['missing_height_players']
+                max_list = 150
+                for item in missing_players[:max_list]:
+                    f.write(f"- **{item['Team']}**: {item['Name']}\n")
+                if len(missing_players) > max_list:
+                    f.write(f"- ... and {len(missing_players) - max_list} more\n")
+                f.write("\n")
             
             # Detailed issues
             if self.issues.get('failed_position_normalization'):
@@ -685,8 +749,22 @@ class DataValidator:
 
 
 if __name__ == "__main__":
-    csv_path = "exports/rosters_and_stats.csv"
-    log_path = "exports/scraper.log"
-    
-    validator = DataValidator(csv_path, log_path)
+    parser = argparse.ArgumentParser(description="Validate roster data output.")
+    parser.add_argument(
+        "-f",
+        "--file",
+        "--csv",
+        dest="csv_path",
+        default="exports/rosters_and_stats.csv",
+        help="Path to roster CSV to validate (default: exports/rosters_and_stats.csv)",
+    )
+    parser.add_argument(
+        "--log",
+        dest="log_path",
+        default="exports/scraper.log",
+        help="Path to scraper log file (default: exports/scraper.log)",
+    )
+    args = parser.parse_args()
+
+    validator = DataValidator(args.csv_path, args.log_path)
     validator.run_full_validation()

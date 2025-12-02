@@ -4,10 +4,11 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
-from .utils import normalize_text
+from .utils import normalize_text, fetch_html
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -91,6 +92,96 @@ def looks_like_club_name(class_raw: str) -> bool:
     keywords = ["club", "volleyball", "nation", "team"]
     count = sum(1 for kw in keywords if kw in low)
     return count >= 2
+
+
+def is_impact_position(position: str) -> bool:
+    """
+    TEAM IMPACT entries often show up in the position field; skip those players.
+    """
+    return "impact" in (position or "").lower()
+
+
+def filter_impact_players(players: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Remove TEAM IMPACT entries from a parsed player list."""
+    filtered = [p for p in players if not is_impact_position(p.get("position", ""))]
+    removed = len(players) - len(filtered)
+    if removed:
+        logger.info("Filtered %d TEAM IMPACT entries from roster parse.", removed)
+    return filtered
+
+
+def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
+    """
+    Parse a Sidearm player profile page for position / class / height.
+    Some schools (e.g., Bradley) omit these on the roster list but include
+    <dl><dd>value</dd><dt>Label</dt></dl> blocks on the player page.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    details: Dict[str, str] = {}
+
+    for dl in soup.find_all("dl"):
+        label_tag = dl.find("dt")
+        value_tag = dl.find("dd")
+        if not label_tag or not value_tag:
+            continue
+
+        label = normalize_text(label_tag.get_text()).lower()
+        value = normalize_text(value_tag.get_text())
+        if not value:
+            continue
+
+        if "position" in label and "position" not in details:
+            details["position"] = value
+        elif "class" in label and "class_raw" not in details:
+            details["class_raw"] = value
+        elif "height" in label and "height_raw" not in details:
+            details["height_raw"] = value
+
+    return details
+
+
+def enrich_from_player_profiles(players: List[Dict[str, str]], base_url: str) -> List[Dict[str, str]]:
+    """
+    For rosters that only list names, fetch individual player profile pages (when provided)
+    to fill position / class / height.
+    """
+    enriched = 0
+    for p in players:
+        needs_position = not p.get("position")
+        needs_class = not p.get("class_raw")
+        needs_height = not p.get("height_raw")
+        if not (needs_position or needs_class or needs_height):
+            continue
+
+        profile_url = p.get("profile_url")
+        if not profile_url:
+            continue
+
+        full_url = urljoin(base_url, profile_url)
+        try:
+            profile_html = fetch_html(full_url)
+        except Exception as e:
+            logger.debug("Could not fetch profile %s: %s", full_url, e)
+            continue
+
+        detail = parse_sidearm_player_profile(profile_html)
+        filled = False
+        if needs_position and detail.get("position"):
+            p["position"] = detail["position"]
+            filled = True
+        if needs_class and detail.get("class_raw"):
+            p["class_raw"] = detail["class_raw"]
+            filled = True
+        if needs_height and detail.get("height_raw"):
+            p["height_raw"] = detail["height_raw"]
+            filled = True
+
+        if filled:
+            enriched += 1
+
+    if enriched:
+        logger.info("Enriched %d players from profile pages.", enriched)
+    return players
 
 
 # ===================== SIDEARM CARD LAYOUT =====================
@@ -185,6 +276,8 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
             }
         )
 
+    players = filter_impact_players(players)
+
     if players:
         logger.info("Parsed %d players from SIDEARM-like cards.", len(players))
 
@@ -278,8 +371,10 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     "position": position,
                     "class_raw": class_raw,
                     "height_raw": height_raw,
-                }
-            )
+            }
+        )
+
+    players = filter_impact_players(players)
 
     if players:
         logger.info("Parsed %d players from SIDEARM-like table.", len(players))
@@ -345,6 +440,8 @@ def parse_drupal_views_roster(soup: BeautifulSoup) -> List[Dict[str, str]]:
                 "height_raw": height_raw,
             }
         )
+
+    players = filter_impact_players(players)
 
     if players:
         logger.info("Parsed %d players from Drupal Views roster.", len(players))
@@ -452,6 +549,8 @@ def parse_heading_card_roster(soup: BeautifulSoup) -> List[Dict[str, str]]:
 
     # Filter out empty ones
     players = [p for p in players if p["name"]]
+
+    players = filter_impact_players(players)
 
     if players:
         logger.info("Parsed %d players from heading-card roster.", len(players))
@@ -588,7 +687,9 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                     })
                 
                 if players:
-                    logger.info("Parsed %d players from WMT reference-based JSON", len(players))
+                    players = filter_impact_players(players)
+                    if players:
+                        logger.info("Parsed %d players from WMT reference-based JSON", len(players))
                     return players
                     
             except (json.JSONDecodeError, KeyError, IndexError) as e:
@@ -681,7 +782,7 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
                         height_feet = obj.get('height_feet')
                         height_inches = obj.get('height_inches')
                         height_raw = ""
-                        if height_feet and height_inches is not None:
+                        if height_feet is not None and height_inches is not None:
                             height_raw = f"{height_feet}-{height_inches}"
                         
                         # Extract class/year
@@ -706,6 +807,7 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
                         })
                     
                     if players:
+                        players = filter_impact_players(players)
                         return players
                         
             except (json.JSONDecodeError, ValueError) as e:
@@ -795,6 +897,7 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
                 "position": position,
                 "class_raw": class_raw,
                 "height_raw": height_raw,
+                "profile_url": obj.get("url", ""),
             }
 
         # Data could be a list, or a dict with a key containing list
@@ -814,6 +917,7 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
                                 players.append(rec)
 
     if players:
+        players = filter_impact_players(players)
         # Filter out non-volleyball positions if we have >30 players
         # (likely grabbed all sports from a multi-sport JSON blob)
         if len(players) > 30:
@@ -971,6 +1075,8 @@ def parse_number_name_details_roster(soup: BeautifulSoup) -> List[Dict[str, str]
 
         i += 1
 
+    players = filter_impact_players(players)
+
     if players:
         logger.info(
             "Parsed %d players from number-name-details text roster.", len(players)
@@ -1051,6 +1157,8 @@ def parse_generic_table_roster(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     "height_raw": height_raw,
                 }
             )
+
+    players = filter_impact_players(players)
 
     if players:
         logger.info("Parsed %d players from generic roster table.", len(players))
@@ -1159,6 +1267,14 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
         return players
 
     # 9a) Optional: WMT-specific text enrichment if we only have names
+    # Optional enrichment from player profile pages when only names are present
+    if any(
+        (not p.get("position") or not p.get("class_raw") or not p.get("height_raw"))
+        and p.get("profile_url")
+        for p in players
+    ):
+        players = enrich_from_player_profiles(players, url)
+
     if all(
         not p.get("position") and not p.get("class_raw") and not p.get("height_raw")
         for p in players
