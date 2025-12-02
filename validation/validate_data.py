@@ -501,7 +501,7 @@ class DataValidator:
         
         if missing_teams:
             print(f"⚠️  {len(missing_teams)} teams missing from output:")
-            for team in sorted(missing_teams)[:20]:
+            for team in sorted(missing_teams):
                 print(f"  - {team}")
             self.issues['missing_teams'] = sorted(missing_teams)
         else:
@@ -655,8 +655,10 @@ class DataValidator:
             
             if self.issues.get('missing_teams'):
                 f.write("## Missing Teams\n\n")
-                for team in self.issues['missing_teams'][:50]:
+                missing_list = self.issues['missing_teams']
+                for team in missing_list:
                     f.write(f"- {team}\n")
+                f.write(f"\nTotal missing teams listed: {len(missing_list)}\n")
                 f.write("\n")
             
             if self.issues.get('teams_with_scrape_errors'):
