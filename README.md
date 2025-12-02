@@ -33,7 +33,7 @@ python3.13 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install pandas requests beautifulsoup4
+pip install -r requirements.txt
 ```
 
 ### Basic Usage
@@ -89,7 +89,8 @@ vb_scraper/
 ├── docs/                   # Documentation
 ├── validation/             # Data validation tools
 ├── scripts/                # Utility scripts
-│   └── export_incoming_players.py     # Export incoming players to CSV
+│   ├── export_incoming_players.py     # Export incoming players to CSV
+│   └── parse_ncaa_pdf_stats.py        # Parse NCAA PDF box scores to stats CSV
 └── exports/                # Output files
 ```
 
@@ -209,6 +210,22 @@ See `settings/INCOMING_PLAYERS_README.md` for details.
 For JavaScript-rendered sites that can't be scraped, add data to `settings/manual_rosters.csv` and run:
 ```bash
 python -m src.merge_manual_rosters
+```
+
+### Manual Stats from NCAA PDF Box Scores
+
+Some teams only publish stats as NCAA "Combined Team Statistics" PDFs (Livestats).
+You can convert these PDFs into stats CSVs and merge them into the main export:
+
+```bash
+# 1) Place PDFs under stats/pdfs/
+#    Example: stats/pdfs/university_of_kentucky_stats.pdf
+
+# 2) Parse PDFs into SIDEARM-style stats CSVs
+python scripts/parse_ncaa_pdf_stats.py
+
+# 3) Merge manual stats into the main export
+python -m src.merge_manual_stats
 ```
 
 ## Known Limitations

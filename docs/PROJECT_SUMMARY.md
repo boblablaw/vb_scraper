@@ -117,6 +117,15 @@ python validation/validate_data.py
 #         validation/reports/problem_teams_*.txt
 ```
 
+### Manual Stats from NCAA PDFs
+```bash
+# Convert "Combined Team Statistics" PDFs -> stats/*.csv
+python scripts/parse_ncaa_pdf_stats.py
+
+# Merge those stats into the main roster export
+python -m src.merge_manual_stats
+```
+
 ### Targeted Scraping
 ```bash
 # Scrape specific teams
@@ -203,7 +212,7 @@ python validation/validate_data.py
 ## Dependencies
 
 ```bash
-pip install pandas requests beautifulsoup4
+pip install -r requirements.txt
 ```
 
 Optional (for future enhancements):
