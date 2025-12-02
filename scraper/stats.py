@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from io import StringIO
+from urllib.parse import urljoin
 
 from .utils import canonical_name, normalize_text
 from .logging_utils import get_logger
@@ -171,7 +172,9 @@ def normalize_stats_columns(df: pd.DataFrame) -> pd.DataFrame:
             new_name = "attack_errors"
         elif cl == "ta":
             new_name = "total_attacks"
-        elif cl == "pct" or "pct" in cl:
+        elif "rec" in cl and "pct" in cl:
+            new_name = "reception_pct"
+        elif cl == "pct" or ("pct" in cl and ("hit" in cl or "att" in cl)):
             new_name = "hitting_pct"
 
         elif cl == "a":
@@ -269,39 +272,53 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
     if not stats_url:
         return {}
 
-    tables = None
-    try:
-        tables = fetch_stats_tables(stats_url)
-    except Exception as e:
-        logger.warning("Could not fetch stats from %s: %s", stats_url, e)
-        
-        # Try fallback URLs if the original fails
-        fallback_urls = []
-        
-        # If URL ends with /2025, try /2024 and without year
-        if stats_url.endswith("/2025"):
-            base_url = stats_url[:-5]  # Remove /2025
-            fallback_urls.append(base_url + "/2024")
-            fallback_urls.append(base_url)
-        # If URL ends with /2024, try without year
-        elif stats_url.endswith("/2024"):
-            fallback_urls.append(stats_url[:-5])
-        
-        # Try each fallback URL
-        for fallback_url in fallback_urls:
-            logger.info("Trying fallback stats URL: %s", fallback_url)
-            try:
-                tables = fetch_stats_tables(fallback_url)
-                if tables:
-                    logger.info("Successfully fetched stats from fallback URL: %s", fallback_url)
-                    break
-            except Exception as fallback_e:
-                logger.debug("Fallback URL %s also failed: %s", fallback_url, fallback_e)
+    def try_tables(urls):
+        for u in urls:
+            if not u:
                 continue
-        
-        if not tables:
-            logger.info("Stats not available for %s - continuing without stats", stats_url)
-            return {}
+            try:
+                t = fetch_stats_tables(u)
+                if t:
+                    logger.info("Fetched stats tables from %s", u)
+                    return t
+            except Exception as e:
+                logger.debug("Stats fetch failed for %s: %s", u, e)
+        return None
+
+    tables = try_tables([stats_url])
+
+    # If failed, try stripping trailing year segment
+    if not tables:
+        if stats_url.endswith("/2025"):
+            base = stats_url[:-5]
+            tables = try_tables([base + "/2024", base])
+        elif stats_url.endswith("/2024"):
+            base = stats_url[:-5]
+            tables = try_tables([base])
+
+    # If still nothing, try to discover iframe src (WMT embeds) and append offense/defense params
+    if not tables:
+        try:
+            logger.info("Attempting iframe stats discovery from %s", stats_url)
+            resp = requests.get(stats_url, timeout=30)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            iframe = soup.find("iframe")
+            iframe_src = iframe.get("src") if iframe else None
+            if iframe_src:
+                base_iframe = urljoin(stats_url, iframe_src)
+                candidates = [
+                    base_iframe,
+                    f"{base_iframe}?main=Individual&overall=Offensive",
+                    f"{base_iframe}?main=Individual&overall=Defensive",
+                ]
+                tables = try_tables(candidates)
+        except Exception as e:
+            logger.debug("Iframe stats discovery failed for %s: %s", stats_url, e)
+
+    if not tables:
+        logger.info("Stats not available for %s - continuing without stats", stats_url)
+        return {}
 
     if not tables:
         return {}
