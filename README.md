@@ -63,38 +63,31 @@ python validation/validate_data.py
 
 ```
 vb_scraper/
-├── src/                    # Main executable scripts
-│   ├── run_scraper.py                 # Main scraper orchestrator
-│   ├── create_team_pivot_csv.py       # Team-level analysis
-│   ├── create_transfers_csv.py        # Transfer data export
-│   ├── merge_manual_rosters.py        # Manual roster merge utility
-│   └── merge_manual_stats.py          # Manual stats merge utility
-├── scraper/                # Core scraping modules
-│   ├── roster.py                      # HTML roster parsing
-│   ├── stats.py                       # Statistics parsing
-│   ├── team_analysis.py               # Per-team data collection
-│   ├── coaches.py                     # Coach info extraction
-│   ├── transfers.py                   # Transfer matching logic
-│   ├── rpi_lookup.py                  # RPI ranking fetcher
-│   ├── utils.py                       # Shared utilities
-│   └── logging_utils.py               # Logging configuration
-├── settings/               # Configuration data
-│   ├── teams.py                       # 347 D1 teams + base URLs
-│   ├── teams_urls.py                  # Year-based URL management
-│   ├── transfers_config.py            # Outgoing transfer list
-│   ├── incoming_players_data.py       # Auto year selector for incoming players
-│   ├── incoming_players_data_YYYY.py  # Year-specific incoming players
-│   ├── rpi_team_name_aliases.py       # RPI name mappings
-│   └── manual_rosters.csv             # Manual roster data
-├── tests/                  # Test suite
-├── docs/                   # Documentation
-├── validation/             # Data validation tools
-│   ├── validate_data.py               # Validation runner
-│   └── reports/                      # Generated validation reports
-├── scripts/                # Utility scripts
-│   ├── export_incoming_players.py     # Export incoming players to CSV
-│   └── parse_ncaa_pdf_stats.py        # Parse NCAA PDF box scores to stats CSV
-└── exports/                # Output files
+├── src/                              # Main executables
+│   ├── run_scraper.py                # Main scraper orchestrator
+│   ├── create_team_pivot_csv.py      # Team-level analysis
+│   ├── create_transfers_csv.py       # Transfer data export
+│   ├── merge_manual_rosters.py       # Manual roster merge utility
+│   └── merge_manual_stats.py         # Manual stats merge utility
+├── scraper/                          # Core scraping modules
+│   ├── roster.py, stats.py, team_analysis.py, coaches.py, transfers.py, rpi_lookup.py, utils.py, logging_utils.py, incoming_players.py
+├── settings/                         # Configuration + seed data
+│   ├── teams.py, teams_urls.py, transfers_config.py, rpi_team_name_aliases.py
+│   ├── incoming_players_data.py + incoming_players_data_YYYY.py
+│   ├── manual_rosters.csv, MANUAL_ROSTERS_README.md, INCOMING_PLAYERS_README.md
+├── scripts/                          # Utility/ops scripts
+│   ├── run_full_pipeline.py, validate_exports.py, export_incoming_players.py, parse_ncaa_pdf_stats.py
+│   ├── download_sidearm_pdfs.py, fetch_coaches.py, snapshot_html.py, find_vb_stats_pdfs.py
+│   ├── compare_export_to_teams.py, summarize_vb_pdfs_coverage.py, browser_automation_poc.py
+├── validation/                       # Data validation
+│   ├── validate_data.py
+│   └── reports/                      # Generated validation_report_<timestamp>.md
+├── exports/                          # Generated CSVs/logs
+├── stats/                            # Source stats CSV/PDFs
+├── docs/                             # Project documentation
+├── tests/                            # Test suite
+├── fixtures/, tempfiles/             # Stored fixtures / scratch data
+└── config/                           # Local configuration (gitignored)
 ```
 
 ## Output Files
