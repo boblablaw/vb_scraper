@@ -505,6 +505,15 @@ class DataValidator:
             for team in sorted(missing_teams):
                 print(f"  - {team}")
             self.issues['missing_teams'] = sorted(missing_teams)
+            reports_dir = os.path.join("validation", "reports")
+            os.makedirs(reports_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            missing_path = os.path.join(reports_dir, f"missing_teams_{timestamp}.txt")
+            with open(missing_path, "w") as f:
+                f.write(f"# Missing teams ({len(missing_teams)})\n\n")
+                for team in sorted(missing_teams):
+                    f.write(team + "\n")
+            print(f"Missing teams list written to {missing_path}")
         else:
             print("✓ All expected teams present")
         
@@ -689,7 +698,9 @@ class DataValidator:
         if self.issues.get('missing_teams'):
             problem_teams.update(self.issues['missing_teams'])
         
-        output_path = f"validation/problem_teams_{timestamp}.txt"
+        reports_dir = os.path.join("validation", "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        output_path = os.path.join(reports_dir, f"problem_teams_{timestamp}.txt")
         with open(output_path, 'w') as f:
             f.write("# Teams that need attention\n")
             f.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")

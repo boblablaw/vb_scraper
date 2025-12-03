@@ -51,16 +51,50 @@ def append_year_to_url(url, year):
     if not url:
         return url
     
-    # Check if year is already in URL
     year_str = str(year)
+    year_span = f"{year}-{(year + 1) % 100:02d}"
+
+    # Check if year is already in URL (either as path segment or query value)
     if f"/{year_str}" in url or f"={year_str}" in url:
         return url
-    
-    # Remove trailing slash if present
-    url = url.rstrip('/')
-    
-    # Append year
-    return f"{url}/{year_str}"
+    # Check for already-present season range like /2025-26/
+    import re
+    if re.search(r"/20\\d{2}-\\d{2}/", url):
+        return url
+
+    # Preserve query strings by appending the year to the path portion only
+    base, sep, query = url.partition("?")
+    base = base.rstrip("/")
+
+    # Some sites (e.g., ccsubluedevils.com) use season spans like /2025-26/ before the final path part
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url)
+    host_uses_span = parsed.netloc in {"ccsubluedevils.com"}
+    path_parts = parsed.path.rstrip("/").split("/")
+
+    # If the last path segment looks like roster/stats and the host uses spans, insert the span before it
+    if host_uses_span and path_parts:
+        # Special-case stats: they live at /{span}/teams?view=splits
+        if path_parts[-1] == "stats":
+            path_parts[-1] = "teams"
+            path_parts.insert(-1, year_span)
+            new_path = "/".join(path_parts)
+            rebuilt = urlunparse(parsed._replace(path=new_path, query="view=splits"))
+            return rebuilt
+        # Roster uses /{span}/roster
+        if path_parts[-1] == "roster":
+            path_parts.insert(-1, year_span)
+            new_path = "/".join(path_parts)
+            rebuilt = urlunparse(parsed._replace(path=new_path))
+            if sep:
+                return f"{rebuilt}{sep}{query}"
+            return rebuilt
+
+    base_with_year = f"{base}/{year_str}"
+    if sep:
+        return f"{base_with_year}?{query}"
+    return base_with_year
 
 
 def get_teams_with_year_urls(year=None):

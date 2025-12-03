@@ -105,13 +105,13 @@ TEAMS = [
         "team": "University of Texas at San Antonio",
         "conference": "American Conference",
         "url": "https://goutsa.com/sports/volleyball/roster",
-        "stats_url": "https://goutsa.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/goutsa/stats/season/604929",
     },
     {
         "team": "Wichita State University",
         "conference": "American Conference",
         "url": "https://goshockers.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goshockers.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://goshockers.com/sports/womens-volleyball/stats/season/",
     },
     {
         "team": "Davidson College",
@@ -200,7 +200,7 @@ TEAMS = [
     {
         "team": "Florida State University",
         "conference": "Atlantic Coast Conference",
-        "url": "https://seminoles.com/sports/womens-volleyball/roster?path=wvball",
+        "url": "https://seminoles.com/sports/womens-volleyball/roster/",
         "stats_url": "https://seminoles.com/sports/womens-volleyball/stats/",
     },
     {
@@ -255,7 +255,7 @@ TEAMS = [
         "team": "Stanford University",
         "conference": "Atlantic Coast Conference",
         "url": "https://gostanford.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gostanford.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/stanford/stats/season/604912",
     },
     {
         "team": "Syracuse University",
@@ -278,7 +278,7 @@ TEAMS = [
     {
         "team": "Wake Forest University",
         "conference": "Atlantic Coast Conference",
-        "url": "https://godeacs.com/roster.aspx?path=wvball",
+        "url": "https://godeacs.com/sports/womens-volleyball/roster",
         "stats_url": "https://godeacs.com/sports/womens-volleyball/stats/",
     },
     {
@@ -363,7 +363,7 @@ TEAMS = [
         "team": "Arizona State University",
         "conference": "Big 12 Conference",
         "url": "https://thesundevils.com/sports/volleyball/roster",
-        "stats_url": "https://thesundevils.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/sundevils/stats/season/605052",
     },
     {
         "team": "Baylor University",
@@ -429,7 +429,7 @@ TEAMS = [
         "team": "University of Central Florida",
         "conference": "Big 12 Conference",
         "url": "https://ucfknights.com/sports/volleyball/roster",
-        "stats_url": "https://ucfknights.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/ucfknights/stats/season/604787",
     },
     {
         "team": "University of Utah",
@@ -488,7 +488,7 @@ TEAMS = [
     {
         "team": "St. John's University",
         "conference": "Big East Conference",
-        "url": "https://redstormsports.com/roster.aspx?path=wvball",
+        "url": "https://redstormsports.com/sports/womens-volleyball/roster",
         "stats_url": "https://redstormsports.com/sports/womens-volleyball/stats/",
     },
     {
@@ -633,7 +633,7 @@ TEAMS = [
         "team": "University of Iowa",
         "conference": "Big Ten Conference",
         "url": "https://hawkeyesports.com/sports/wvball/roster",
-        "stats_url": "https://hawkeyesports.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/iowa/stats/season/604844",
     },
     {
         "team": "University of Maryland",
@@ -663,7 +663,7 @@ TEAMS = [
         "team": "University of Nebraska",
         "conference": "Big Ten Conference",
         "url": "https://huskers.com/sports/volleyball/roster",
-        "stats_url": "https://huskers.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/huskers/stats/season/604893",
     },
     {
         "team": "Northwestern University",
@@ -687,13 +687,13 @@ TEAMS = [
         "team": "Pennsylvania State University",
         "conference": "Big Ten Conference",
         "url": "https://gopsusports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gopsusports.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/gopsusports/stats/season/605079",
     },
     {
         "team": "Purdue University",
         "conference": "Big Ten Conference",
         "url": "https://purduesports.com/sports/volleyball/roster",
-        "stats_url": "https://purduesports.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/purdueboilermakers/stats/season/605004",
     },
     {
         "team": "Rutgers",
@@ -704,14 +704,14 @@ TEAMS = [
     {
         "team": "University of California, Los Angeles",
         "conference": "Big Ten Conference",
-        "url": "https://uclabruins.com/roster.aspx?path=wvball",
+        "url": "https://uclabruins.com/sports/womens-volleyball/roster",
         "stats_url": "https://uclabruins.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Southern California",
         "conference": "Big Ten Conference",
-        "url": "https://uclabruins.com/roster.aspx?path=wvball",
-        "stats_url": "https://uclabruins.com/sports/womens-volleyball/stats/",
+        "url": "https://usctrojans.com/sports/womens-volleyball/roster",
+        "stats_url": "https://usctrojans.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Washington",
@@ -1154,8 +1154,8 @@ TEAMS = [
     {
         "team": "Miami University (Ohio)",
         "conference": "Mid-American Conference",
-        "url": "https://miamiredhawks.com/sports/womens-volleyball/roster/2025",
-        "stats_url": "https://miamiredhawks.com/sports/womens-volleyball/stats/",
+        "url": "https://miamiredhawks.com/sports/womens-volleyball/roster",
+        "stats_url": "https://miamiredhawks.com/sports/womens-volleyball/stats",
     },
     {
         "team": "Northern Illinois University",
@@ -1334,20 +1334,20 @@ TEAMS = [
     {
         "team": "University of New Mexico",
         "conference": "Mountain West Conference",
-        "url": "https://gonewmexico.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gonewmexico.com/sports/womens-volleyball/stats/",
+        "url": "https://golobos.com/sports/wvball/roster",
+        "stats_url": "https://wmt.games/golobos/stats/season/604899",
     },
     {
         "team": "San Diego State University",
         "conference": "Mountain West Conference",
-        "url": "https://goaztecs.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goaztecs.com/sports/womens-volleyball/stats/",
+        "url": "https://goaztecs.com/sports/volleyball/roster",
+        "stats_url": "https://wmt.games/sandiegostate/stats/season/605020",
     },
     {
         "team": "San Jose State University",
         "conference": "Mountain West Conference",
         "url": "https://sjsuspartans.com/sports/womens-volleyball/roster",
-        "stats_url": "https://sjsuspartans.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://wmt.games/sanjosestate/stats/season/605023",
     },
     {
         "team": "University of Nevada, Las Vegas",
@@ -1358,20 +1358,20 @@ TEAMS = [
     {
         "team": "Utah State University",
         "conference": "Mountain West Conference",
-        "url": "https://utahstateathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://utahstateathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://utahstateaggies.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utahstateaggies.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Wyoming",
         "conference": "Mountain West Conference",
-        "url": "https://gowyoming.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gowyoming.com/sports/womens-volleyball/stats/",
+        "url": "https://utrockets.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utrockets.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Central Connecticut State University",
         "conference": "NEC",
         "url": "https://ccsubluedevils.com/sports/wvball/roster",
-        "stats_url": "https://ccsubluedevils.com/sports/womens-volleyball/stats/",
+        "stats_url": "https://ccsubluedevils.com/sports/wvball/stats",
     },
     {
         "team": "Chicago State University",
@@ -1388,26 +1388,26 @@ TEAMS = [
     {
         "team": "Le Moyne College",
         "conference": "NEC",
-        "url": "https://lemoyne.edu/athletics/womens-volleyball/roster",
-        "stats_url": "https://lemoyne.edu/sports/womens-volleyball/stats/",
+        "url": "https://lemoynedolphins.com/sports/womens-volleyball/roster",
+        "stats_url": "https://lemoynedolphins.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Long Island University (LIU)",
         "conference": "NEC",
-        "url": "https://liusharks.com/sports/womens-volleyball/roster",
-        "stats_url": "https://liusharks.com/sports/womens-volleyball/stats/",
+        "url": "https://www.liuathletics.com/sports/womens-volleyball/roster",
+        "stats_url": "https://www.liuathletics.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Mercyhurst University",
         "conference": "NEC",
-        "url": "https://mercyhurst.edu/athletics/womens-volleyball",
-        "stats_url": "https://mercyhurst.edu/sports/womens-volleyball/stats/",
+        "url": "https://hurstathletics.com/sports/womens-volleyball/roster/2025",
+        "stats_url": "https://hurstathletics.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of New Haven",
         "conference": "NEC",
-        "url": "https://newhaven.edu/athletics/womens-volleyball",
-        "stats_url": "https://newhaven.edu/sports/womens-volleyball/stats/",
+        "url": "https://newhavenchargers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://newhavenchargers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Saint Francis University (Saint Francis (PA))[n]",
@@ -1472,8 +1472,8 @@ TEAMS = [
     {
         "team": "Tennessee Technological University",
         "conference": "Ohio Valley Conference",
-        "url": "https://tntech.edu/athletics/womens-volleyball",
-        "stats_url": "https://tntech.edu/sports/womens-volleyball/stats/",
+        "url": "https://www.ttusports.com/sports/wvball/2025-26/roster",
+        "stats_url": "https://www.ttusports.com/sports/wvball/2025-26/teams?view=splits",
     },
     {
         "team": "University of Tennessee at Martin (UT Martin)",
@@ -1520,8 +1520,8 @@ TEAMS = [
     {
         "team": "Lafayette College",
         "conference": "Patriot League",
-        "url": "https://golafayette.com/sports/womens-volleyball/roster",
-        "stats_url": "https://golafayette.com/sports/womens-volleyball/stats/",
+        "url": "https://goleopards.com/sports/womens-volleyball/roster",
+        "stats_url": "https://goleopards.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Lehigh University",
@@ -1544,44 +1544,44 @@ TEAMS = [
     {
         "team": "University of Alabama",
         "conference": "Southeastern Conference",
-        "url": "https://goalabama.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goalabama.com/sports/womens-volleyball/stats/",
+        "url": "https://rolltide.com/sports/womens-volleyball/roster",
+        "stats_url": "https://rolltide.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Arkansas",
         "conference": "Southeastern Conference",
-        "url": "https://arkansasathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://arkansasathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://arkansasrazorbacks.com/sport/w-volley/roster",
+        "stats_url": "https://wmt.games/arkansasrazorbacks/stats/season/604753",
     },
     {
         "team": "Auburn University",
         "conference": "Southeastern Conference",
-        "url": "https://auburntigers.com/sports/womens-volleyball/roster",
-        "stats_url": "https://auburntigers.com/sports/womens-volleyball/stats/",
+        "url": "https://auburntigers.com/sports/volleyball/roster",
+        "stats_url": "https://wmt.games/auburn/stats/season/604755",
     },
     {
         "team": "University of Florida",
         "conference": "Southeastern Conference",
-        "url": "https://floridaathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://floridaathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://floridagators.com/sports/womens-volleyball/roster",
+        "stats_url": "https://floridagators.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Georgia",
         "conference": "Southeastern Conference",
-        "url": "https://gogeorgia.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gogeorgia.com/sports/womens-volleyball/stats/",
+        "url": "https://georgiadogs.com/sports/womens-volleyball/roster",
+        "stats_url": "https://georgiadogs.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Kentucky",
         "conference": "Southeastern Conference",
-        "url": "https://gokentucky.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gokentucky.com/sports/womens-volleyball/stats/",
+        "url": "https://ukathletics.com/sports/wvball/roster",
+        "stats_url": "https://wmt.games/Ukathletics/stats/season/605063",
     },
     {
         "team": "Louisiana State University",
         "conference": "Southeastern Conference",
-        "url": "https://lsusports.net/sports/womens-volleyball/roster",
-        "stats_url": "https://lsusports.net/sports/womens-volleyball/stats/",
+        "url": "https://lsusports.net/sports/vb/roster/",
+        "stats_url": "https://wmt.games/lsu/stats/season/604860",
     },
     {
         "team": "Mississippi State University",
@@ -1592,8 +1592,8 @@ TEAMS = [
     {
         "team": "University of Missouri",
         "conference": "Southeastern Conference",
-        "url": "https://missouriathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://missouriathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://mutigers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://mutigers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Mississippi (Ole Miss)",
@@ -1604,26 +1604,26 @@ TEAMS = [
     {
         "team": "University of Oklahoma",
         "conference": "Southeastern Conference",
-        "url": "https://oklahomaathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://oklahomaathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://soonersports.com/sports/volleyball/roster",
+        "stats_url": "https://soonersports.com/sports/volleyball/stats/",
     },
     {
         "team": "University of South Carolina",
         "conference": "Southeastern Conference",
-        "url": "https://gosouthcarolina.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gosouthcarolina.com/sports/womens-volleyball/stats/",
+        "url": "https://gamecocksonline.com/sports/wvball/roster",
+        "stats_url": "https://wmt.games/gamecocksonline/stats/season/605029",
     },
     {
         "team": "University of Tennessee",
         "conference": "Southeastern Conference",
-        "url": "https://gotennessee.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gotennessee.com/sports/womens-volleyball/stats/",
+        "url": "https://utsports.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utsports.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Texas",
         "conference": "Southeastern Conference",
-        "url": "https://texasathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://texasathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://texaslonghorns.com/sports/womens-volleyball/roster",
+        "stats_url": "https://texaslonghorns.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Texas A&M University",
@@ -1634,8 +1634,8 @@ TEAMS = [
     {
         "team": "Vanderbilt University",
         "conference": "Southeastern Conference",
-        "url": "https://vanderbilt.edu/athletics/womens-volleyball/roster",
-        "stats_url": "https://vanderbilt.edu/sports/womens-volleyball/stats/",
+        "url": "https://vucommodores.com/sports/wvolley/roster/",
+        "stats_url": "https://vucommodores.com/sports/wvolley/stats/",
     },
     {
         "team": "University of Tennessee at Chattanooga",
@@ -1646,8 +1646,8 @@ TEAMS = [
     {
         "team": "The Citadel",
         "conference": "Southern Conference",
-        "url": "https://citadelathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://citadelathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://citadelsports.com/sports/womens-volleyball/roster",
+        "stats_url": "https://citadelsports.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "East Tennessee State University",
@@ -1658,14 +1658,14 @@ TEAMS = [
     {
         "team": "Furman University",
         "conference": "Southern Conference",
-        "url": "https://furmansports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://furmansports.com/sports/womens-volleyball/stats/",
+        "url": "https://furmanpaladins.com/sports/womens-volleyball/roster",
+        "stats_url": "https://furmanpaladins.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Mercer University",
         "conference": "Southern Conference",
-        "url": "https://mercersports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://mercersports.com/sports/womens-volleyball/stats/",
+        "url": "https://mercerbears.com/sports/womens-volleyball/roster",
+        "stats_url": "https://mercerbears.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Samford University",
@@ -1694,8 +1694,8 @@ TEAMS = [
     {
         "team": "East Texas A&M University",
         "conference": "Southland Conference",
-        "url": "https://tamucathletics.com/sports/wvball/roster",
-        "stats_url": "https://tamucathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://lionathletics.com/sports/womens-volleyball/roster",
+        "stats_url": "https://lionathletics.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Houston Christian University",
@@ -1712,8 +1712,8 @@ TEAMS = [
     {
         "team": "Lamar University",
         "conference": "Southland Conference",
-        "url": "https://golamar.com/sports/womens-volleyball/roster",
-        "stats_url": "https://golamar.com/sports/womens-volleyball/stats/",
+        "url": "https://lamarcardinals.com/sports/womens-volleyball/roster",
+        "stats_url": "https://lamarcardinals.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "McNeese State University",
@@ -1724,8 +1724,8 @@ TEAMS = [
     {
         "team": "University of New Orleans",
         "conference": "Southland Conference",
-        "url": "https://goneworleans.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goneworleans.com/sports/womens-volleyball/stats/",
+        "url": "https://unoprivateers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://unoprivateers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Nicholls State University",
@@ -1760,8 +1760,8 @@ TEAMS = [
     {
         "team": "University of Texas Rio Grande Valley",
         "conference": "Southland Conference",
-        "url": "https://gorivervaqueros.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gorivervaqueros.com/sports/womens-volleyball/stats/",
+        "url": "https://goutrgv.com/sports/womens-volleyball/roster",
+        "stats_url": "https://goutrgv.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Alabama A&M University",
@@ -1802,14 +1802,14 @@ TEAMS = [
     {
         "team": "Jackson State University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://jsutigers.com/sports/womens-volleyball/roster",
-        "stats_url": "https://jsutigers.com/sports/womens-volleyball/stats/",
+        "url": "https://gojsutigers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://gojsutigers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Mississippi Valley State University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://mvsuathletics.com/index.aspx?path=wvball",
-        "stats_url": "https://mvsuathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://mvsusports.com/sports/womens-volleyball/roster",
+        "stats_url": "https://mvsusports.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Prairie View A&M University",
@@ -1826,26 +1826,26 @@ TEAMS = [
     {
         "team": "Texas Southern University",
         "conference": "Southwestern Athletic Conference",
-        "url": "https://tsuball.com/index.aspx?path=wvball",
-        "stats_url": "https://tsuball.com/sports/womens-volleyball/stats/",
+        "url": "https://tsusports.com/sports/womens-volleyball/roster",
+        "stats_url": "https://tsusports.com/sports/womens-volleyball/stats",
     },
     {
         "team": "University of Denver",
         "conference": "The Summit League",
-        "url": "https://godenver.com/sports/womens-volleyball/roster",
-        "stats_url": "https://godenver.com/sports/womens-volleyball/stats/",
+        "url": "https://denverpioneers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://denverpioneers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Missouri-Kansas City",
         "conference": "The Summit League",
-        "url": "https://gokangaroos.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gokangaroos.com/sports/womens-volleyball/stats/",
+        "url": "https://kcroos.com/sports/womens-volleyball/roster",
+        "stats_url": "https://kcroos.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of North Dakota",
         "conference": "The Summit League",
-        "url": "https://gonorthdakota.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gonorthdakota.com/sports/womens-volleyball/stats/",
+        "url": "https://fightinghawks.com/sports/womens-volleyball/roster",
+        "stats_url": "https://fightinghawks.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "North Dakota State University",
@@ -1868,14 +1868,14 @@ TEAMS = [
     {
         "team": "University of St. Thomas",
         "conference": "The Summit League",
-        "url": "https://gostthomas.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gostthomas.com/sports/womens-volleyball/stats/",
+        "url": "https://stubobcats.com/sports/womens-volleyball/roster",
+        "stats_url": "https://stubobcats.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of South Dakota",
         "conference": "The Summit League",
-        "url": "https://southdakotasports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://southdakotasports.com/sports/womens-volleyball/stats/",
+        "url": "https://goyotes.com/sports/womens-volleyball/roster",
+        "stats_url": "https://goyotes.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "South Dakota State University",
@@ -1898,8 +1898,8 @@ TEAMS = [
     {
         "team": "Coastal Carolina University",
         "conference": "Sun Belt Conference",
-        "url": "https://coastalcarolina.edu/athletics/womens-volleyball/roster",
-        "stats_url": "https://coastalcarolina.edu/sports/womens-volleyball/stats/",
+        "url": "https://goccusports.com/sports/womens-volleyball/roster/",
+        "stats_url": "https://goccusports.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Georgia Southern University",
@@ -1916,8 +1916,8 @@ TEAMS = [
     {
         "team": "James Madison University",
         "conference": "Sun Belt Conference",
-        "url": "https://jamesmadisonathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://jamesmadisonathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://jmusports.com/sports/womens-volleyball/roster",
+        "stats_url": "https://jmusports.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Louisiana at Lafayette",
@@ -1928,14 +1928,14 @@ TEAMS = [
     {
         "team": "Marshall University",
         "conference": "Sun Belt Conference",
-        "url": "https://gomarshall.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gomarshall.com/sports/womens-volleyball/stats/",
+        "url": "https://herdzone.com/sports/womens-volleyball/roster",
+        "stats_url": "https://herdzone.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Old Dominion University",
         "conference": "Sun Belt Conference",
-        "url": "https://odusports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://odusports.com/sports/womens-volleyball/stats/",
+        "url": "https://odusports.com/sports/volleyball/roster",
+        "stats_url": "https://odusports.com/sports/volleyball/stats/",
     },
     {
         "team": "University of South Alabama",
@@ -1958,8 +1958,8 @@ TEAMS = [
     {
         "team": "Troy University",
         "conference": "Sun Belt Conference",
-        "url": "https://troyathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://troyathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://troytrojans.com/sports/womens-volleyball/roster",
+        "stats_url": "https://troytrojans.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of Louisiana at Monroe",
@@ -1970,8 +1970,8 @@ TEAMS = [
     {
         "team": "Gonzaga University",
         "conference": "West Coast Conference",
-        "url": "https://gonzaga.edu/athletics/womens-volleyball/roster",
-        "stats_url": "https://gonzaga.edu/sports/womens-volleyball/stats/",
+        "url": "https://gozags.com/sports/womens-volleyball/roster",
+        "stats_url": "https://gozags.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Loyola Marymount University",
@@ -1982,14 +1982,14 @@ TEAMS = [
     {
         "team": "Oregon State University",
         "conference": "West Coast Conference",
-        "url": "https://oregonstateathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://oregonstateathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://osubeavers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://osubeavers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of the Pacific",
         "conference": "West Coast Conference",
-        "url": "https://pacificathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://pacificathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://pacifictigers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://pacifictigers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Pepperdine University",
@@ -2000,26 +2000,26 @@ TEAMS = [
     {
         "team": "University of Portland",
         "conference": "West Coast Conference",
-        "url": "https://goportland.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goportland.com/sports/womens-volleyball/stats/",
+        "url": "https://portlandpilots.com/sports/womens-volleyball/roster",
+        "stats_url": "https://portlandpilots.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of San Diego",
         "conference": "West Coast Conference",
-        "url": "https://sandiegosports.com/sports/womens-volleyball/roster",
-        "stats_url": "https://sandiegosports.com/sports/womens-volleyball/stats/",
+        "url": "https://usdtoreros.com/sports/womens-volleyball/roster",
+        "stats_url": "https://usdtoreros.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "University of San Francisco",
         "conference": "West Coast Conference",
-        "url": "https://gosanfrancisco.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gosanfrancisco.com/sports/womens-volleyball/stats/",
+        "url": "https://usfdons.com/sports/womens-volleyball/roster",
+        "stats_url": "https://usfdons.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Santa Clara University",
         "conference": "West Coast Conference",
-        "url": "https://gosantaclara.com/sports/womens-volleyball/roster",
-        "stats_url": "https://gosantaclara.com/sports/womens-volleyball/stats/",
+        "url": "https://santaclarabroncos.com/sports/womens-volleyball/roster",
+        "stats_url": "https://santaclarabroncos.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Saint Mary's College of California",
@@ -2030,14 +2030,14 @@ TEAMS = [
     {
         "team": "Seattle University",
         "conference": "West Coast Conference",
-        "url": "https://seattleathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://seattleathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://goseattleu.com/sports/volleyball/roster",
+        "stats_url": "https://wmt.games/goseattleu/stats/season/604967",
     },
     {
         "team": "Washington State University",
         "conference": "West Coast Conference",
-        "url": "https://washingtonstateathletics.com/sports/womens-volleyball/roster",
-        "stats_url": "https://washingtonstateathletics.com/sports/womens-volleyball/stats/",
+        "url": "https://wsucougars.com/sports/womens-volleyball/roster",
+        "stats_url": "https://wsucougars.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Abilene Christian University",
@@ -2066,14 +2066,14 @@ TEAMS = [
     {
         "team": "University of Texas at Arlington",
         "conference": "Western Athletic Conference",
-        "url": "https://utamavericks.com/sports/womens-volleyball/roster",
-        "stats_url": "https://utamavericks.com/sports/womens-volleyball/stats/",
+        "url": "https://utamavs.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utamavs.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Utah Tech University",
         "conference": "Western Athletic Conference",
-        "url": "https://goutahtech.com/sports/womens-volleyball/roster",
-        "stats_url": "https://goutahtech.com/sports/womens-volleyball/stats/",
+        "url": "https://utahtechtrailblazers.com/sports/womens-volleyball/roster",
+        "stats_url": "https://utahtechtrailblazers.com/sports/womens-volleyball/stats/",
     },
     {
         "team": "Utah Valley University",
