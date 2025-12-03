@@ -115,6 +115,7 @@ python validation/validate_data.py
 
 # Output: validation/reports/validation_report_*.md
 #         validation/reports/problem_teams_*.txt
+#         validation/reports/missing_teams_*.txt
 ```
 
 ### Manual Stats from NCAA PDFs

@@ -129,6 +129,7 @@ All outputs are written to the `exports/` directory:
 - `scraper.log` — Detailed execution log
 - `validation/reports/validation_report_*.md` — Data quality validation reports
 - `validation/reports/problem_teams_*.txt` — List of teams with data issues
+- `validation/reports/missing_teams_*.txt` — Teams expected but missing from output
 
 ## Architecture
 
@@ -358,7 +359,7 @@ Year-based URL logic:
 ### Roster HTML Parsing Quirks
 
 - **SIDEARM**: Most common platform. Look for classes like `.sidearm-roster-player`, `.sidearm-roster-card`. Stats tables use `offensiveStats` and `defensiveStats` classes.
-- **WMT Platform**: Uses reference-based JSON data embedded in script tags. The parser (`parse_wmt_reference_json_roster()`) extracts large JSON arrays (50KB+, 1000+ items), finds roster reference keys, and recursively resolves integer references to extract player data (names, positions, heights, class years). This parser successfully handles 13 teams including Auburn, Stanford, Virginia Tech, Arizona State, Cincinnati, UCF, Iowa, Penn State, Purdue, Bradley, SDSU, SJSU, and Old Dominion. **Note**: WMT platform stats pages are JavaScript-rendered without parseable JSON data—stats for these teams cannot be scraped without browser automation.
+- **WMT Platform**: Uses reference-based JSON data embedded in script tags. The parser (`parse_wmt_reference_json_roster()`) extracts large JSON arrays (50KB+, 1000+ items), finds roster reference keys, and recursively resolves integer references to extract player data (names, positions, heights, class years). This parser successfully handles 13 teams including Auburn, Stanford, Virginia Tech, Arizona State, Cincinnati, UCF, Iowa, Penn State, Purdue, Bradley, SDSU, SJSU, and Old Dominion. Stats for WMT deployments are pulled directly from `https://api.wmt.games/api/statistics/teams/<team_id>/players?per_page=150` (no browser automation needed).
 - **Presto Sports**: Uses `<rosterspot>` custom tags.
 - **Staff vs. Player Detection**: The parser skips coaching staff blocks by looking for keywords like "coaching staff" or "head coach" in heading text.
 - **Multi-column Stats Tables**: Stats tables sometimes use multi-level column headers. The `column_key()` function in `stats.py` flattens these.

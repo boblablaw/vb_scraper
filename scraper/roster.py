@@ -5,6 +5,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
+from io import StringIO
 
 from bs4 import BeautifulSoup, Tag
 
@@ -118,6 +119,51 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
     """
     soup = BeautifulSoup(html, "html.parser")
     details: Dict[str, str] = {}
+
+    # Common header fields on profile pages
+    if not details.get("position"):
+        pos_tag = soup.select_one(
+            ".sidearm-roster-player-position, .sidearm-player-position, .roster-bio-position"
+        )
+        if pos_tag:
+            val = normalize_text(pos_tag.get_text())
+            if val:
+                details["position"] = val
+    if not details.get("position"):
+        # Some sites use a flex container with the sport appended
+        pos_container = soup.select_one(".s-person-details__position div")
+        if pos_container:
+            val = normalize_text(pos_container.get_text())
+            if val:
+                details["position"] = val
+
+    if not details.get("class_raw"):
+        class_tag = soup.select_one(
+            ".sidearm-roster-player-academic-year, .sidearm-player-academic-year, .roster-bio-class"
+        )
+        if class_tag:
+            val = normalize_text(class_tag.get_text())
+            if val:
+                details["class_raw"] = val
+
+    if not details.get("height_raw"):
+        height_tag = soup.select_one(
+            ".sidearm-roster-player-height, .sidearm-player-height, .roster-bio-height"
+        )
+        if height_tag:
+            val = normalize_text(height_tag.get_text())
+            if val:
+                details["height_raw"] = val
+    if not details.get("height_raw"):
+        # Profile fields item blocks e.g., <small class="profile-fields-item__label">Height</small><span class="profile-fields-item__value">6-0</span>
+        for label in soup.select(".profile-fields-item__label"):
+            if normalize_text(label.get_text()).lower() == "height":
+                val_tag = label.find_next_sibling(class_="profile-fields-item__value")
+                if val_tag:
+                    val = normalize_text(val_tag.get_text())
+                    if val:
+                        details["height_raw"] = val
+                        break
 
     for dl in soup.find_all("dl"):
         label_tag = dl.find("dt")
@@ -662,6 +708,20 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                     player_info = resolve(player_obj.get('player', {}))
                     position_obj = resolve(player_obj.get('player_position', {}))
                     class_obj = resolve(player_obj.get('class_level', {}))
+                    def find_height(obj) -> str:
+                        """
+                        Best-effort height extractor when height_feet/height_inches are absent.
+                        Looks for strings like 6-1 or 6'1 in any string values of the object.
+                        """
+                        if not isinstance(obj, dict):
+                            return ""
+                        import re
+                        for v in obj.values():
+                            if isinstance(v, str):
+                                m = re.search(r"[4-7]['\\-]\\s?\\d{1,2}", v)
+                                if m:
+                                    return m.group(0).replace("'", "-").replace(" ", "")
+                        return ""
                     
                     # Extract data with safe handling
                     first_name = resolve(player_info.get('first_name', '')) if isinstance(player_info, dict) else ''
@@ -675,6 +735,18 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                     height_feet = resolve(player_obj.get('height_feet', '')) or ''
                     height_inches = resolve(player_obj.get('height_inches', '')) or ''
                     height_raw = f"{height_feet}-{height_inches}" if height_feet and height_inches else ''
+                    if not height_raw:
+                        height_raw = find_height(player_obj) or find_height(player_info)
+
+                    profile_url = ""
+                    if isinstance(player_info, dict):
+                        profile_url = (
+                            player_info.get("url")
+                            or player_info.get("link")
+                            or player_obj.get("url")
+                            or player_obj.get("link")
+                            or ""
+                        )
                     
                     # Position
                     position = ''
@@ -700,6 +772,7 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                         "position": position,
                         "class_raw": class_raw,
                         "height_raw": height_raw,
+                        "profile_url": profile_url,
                     })
                 
                 if players:
@@ -1152,6 +1225,14 @@ def parse_generic_table_roster(soup: BeautifulSoup) -> List[Dict[str, str]]:
 
             name = get(name_idx)
             position = get(pos_idx)
+            if pos_idx is not None and (not position or position.strip() == ""):
+                pos_cell = cells[pos_idx]
+                parts = [
+                    s
+                    for s in pos_cell.stripped_strings
+                    if s.lower() not in {"position", "pos", "pos."}
+                ]
+                position = " ".join(parts)
             class_raw = get(class_idx)
             height_raw = get(height_idx)
 
@@ -1262,10 +1343,73 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
         logger.info("Trying WMT reference-based JSON parser for %s ...", url)
         players = parse_wmt_reference_json_roster(html, url)
 
+
+
     # 6) Embedded JSON blobs
     if not players:
         logger.info("Fallback: trying embedded JSON roster for %s ...", url)
         players = parse_roster_from_sidearm_json(html, url)
+
+    # 6b) Tabular roster fallback (e.g., UNCBears) where names may be slugs or missing
+    def parse_tabular_roster_fallback(html_text: str) -> List[Dict[str, str]]:
+        out: List[Dict[str, str]] = []
+        try:
+            tables = pd.read_html(StringIO(html_text))
+        except Exception:
+            return out
+        for t in tables:
+            cols = [str(c).lower() for c in t.columns]
+            has_class = any("academic" in c or c == "yr" for c in cols)
+            has_height = any("ht" in c or "height" in c for c in cols)
+            has_pos = any("pos" in c for c in cols)
+            if not (has_class and has_height and has_pos):
+                continue
+            name_col = None
+            for c in t.columns:
+                lc = str(c).lower()
+                if "name" in lc or "player" in lc:
+                    name_col = c
+                    break
+            if name_col is None:
+                for slug_col in t.columns:
+                    lc = str(slug_col).lower()
+                    if "instagram" in lc or "inflcr" in lc:
+                        def slug_to_name(x):
+                            if not isinstance(x, str):
+                                return ""
+                            parts = x.replace("-", " ").split()
+                            return " ".join(p.capitalize() for p in parts)
+                        t["name"] = t[slug_col].apply(slug_to_name)
+                        name_col = "name"
+                        break
+            if name_col is None:
+                continue
+                for _, row in t.iterrows():
+                    name_val = str(row.get(name_col, "")).strip()
+                    if not name_val:
+                        continue
+                    player = {
+                        "name": name_val,
+                        "number": row.get("#") or row.get("number") or "",
+                        "position": row.get("Pos.") or row.get("pos") or row.get("Pos") or "",
+                        "class_raw": row.get("Academic Year") or row.get("yr") or row.get("Year") or "",
+                        "height_raw": row.get("Ht.") or row.get("Ht") or row.get("height") or "",
+                    }
+                    out.append(player)
+            if out:
+                return out
+        return out
+
+    # If we parsed very few players (<10), attempt tabular fallback once
+    if players and len(players) < 10:
+        tab_players = parse_tabular_roster_fallback(html)
+        if tab_players:
+            logger.info(
+                "Replacing %d parsed players with %d from tabular roster fallback",
+                len(players),
+                len(tab_players),
+            )
+            players = tab_players
 
     # 7) Number / name / details text roster (BYU-style list/table view)
     if not players:

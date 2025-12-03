@@ -14,6 +14,7 @@ from .utils import (
     normalize_height,
     normalize_school_key,
     extract_position_codes,
+    canonical_name,
 )
 from .roster import parse_roster
 from .stats import build_stats_lookup, attach_stats_to_player
@@ -111,14 +112,70 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
                 )
                 return []
 
+    # If too few players parsed (likely wrong year), try without year once
+    if players and len(players) < 6 and not fallback_used:
+        fallback_url = strip_year_from_url(original_roster_url)
+        if fallback_url != original_roster_url:
+            logger.warning(
+                "Only %d players parsed for %s; retrying without year: %s -> %s",
+                len(players),
+                team_name,
+                original_roster_url,
+                fallback_url,
+            )
+            try:
+                roster_html = fetch_html(fallback_url)
+                retry_players = parse_roster(roster_html, fallback_url)
+                if retry_players:
+                    players = retry_players
+            except Exception as e:
+                logger.error(
+                    "Retry without year failed for %s (%s): %s",
+                    team_name,
+                    fallback_url,
+                    e,
+                )
+
     if not players:
         logger.warning("No players parsed for team %s from %s", team_name, roster_url)
         return []
+
+    blocklist = {
+        "university of texas": {"torrey stafford"},
+        "coppin state university": {"takenya stafford"},
+        "temple university": {"lainey team impact"},
+        "georgia institute of technology": {"luanna emiliano", "bruno dewes", "leo weng"},
+        "university of california, davis": {"maren b."},
+        "western kentucky university": {"harlie bryant"},
+    }
+    team_key = team_name.lower().strip()
+    if team_key in blocklist:
+        filtered_players = []
+        for p in players:
+            nm = canonical_name(p.get("name", ""))
+            if nm in blocklist[team_key]:
+                logger.info("Dropping blocked player %s for team %s", p.get("name", ""), team_name)
+                continue
+            filtered_players.append(p)
+        players = filtered_players
+
+    def _dedupe_repeated_name(name: str) -> str:
+        """
+        Some sources emit a name twice in the same string (e.g., 'Annabelle Denommé Annabelle Denommé').
+        If the first half of the tokens equals the second half, keep only one instance.
+        """
+        parts = name.split()
+        if len(parts) % 2 == 0:
+            half = len(parts) // 2
+            if parts[:half] == parts[half:]:
+                return " ".join(parts[:half])
+        return name
 
     # Per-player normalization
     for p in players:
         raw_name = p.get("name", "")
         clean_name = normalize_player_name(raw_name)
+        clean_name = _dedupe_repeated_name(clean_name)
         p["name"] = clean_name
 
         class_raw = p.get("class_raw", "")
@@ -139,7 +196,39 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         logger.warning("No players for team %s", team_name)
         return []
 
-    stats_lookup = build_stats_lookup(stats_url)
+    stats_lookup = {}
+    if stats_url:
+        try:
+            stats_lookup = build_stats_lookup(stats_url)
+        except requests.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            if status == 404:
+                fallback_stats_url = strip_year_from_url(stats_url)
+                if fallback_stats_url != stats_url:
+                    logger.warning(
+                        "Stats 404 for %s, retrying without year: %s -> %s",
+                        team_name,
+                        stats_url,
+                        fallback_stats_url,
+                    )
+                    try:
+                        stats_lookup = build_stats_lookup(fallback_stats_url)
+                        stats_url = fallback_stats_url
+                    except Exception as e2:
+                        logger.error(
+                            "Fallback stats fetch failed for %s (%s): %s",
+                            team_name,
+                            fallback_stats_url,
+                            e2,
+                        )
+                        stats_lookup = {}
+                else:
+                    logger.error("ERROR fetching stats for %s: %s", team_name, e)
+            else:
+                logger.error("ERROR fetching stats for %s: %s", team_name, e)
+        except Exception as e:
+            logger.error("ERROR fetching stats for %s: %s", team_name, e)
+            stats_lookup = {}
 
     rows: List[Dict[str, Any]] = []
 

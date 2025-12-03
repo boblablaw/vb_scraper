@@ -99,6 +99,8 @@ All outputs are written to `exports/`:
 - **`outgoing_transfers.csv`** — Transfer data export
 - **`scraper.log`** — Detailed execution log
 - **Validation reports** — Written to `validation/reports/validation_report_<timestamp>.md`
+- **Missing teams** — Written to `validation/reports/missing_teams_<timestamp>.txt`
+- **Problem teams** — Written to `validation/reports/problem_teams_<timestamp>.txt`
 
 ## Architecture
 
@@ -228,7 +230,7 @@ python -m src.merge_manual_stats
 ## Known Limitations
 
 - **JavaScript-rendered rosters**: Some sites require manual data entry
-- **WMT platform stats**: Stats pages are JavaScript-rendered (no parseable data)
+- **WMT platform stats**: Served via `api.wmt.games` (e.g., `/api/statistics/teams/<id>/players`)
 - **Stats availability**: Not all teams publish online statistics
 - **Platform changes**: Website redesigns may break parsers
 - **Rate limiting**: No delays between requests (use responsibly)
