@@ -40,6 +40,9 @@ fixtures/
 tempfiles/
 validation/reports/
 
+# Local config
+config/
+
 # Environment variables
 .env
 .env.local
@@ -47,3 +50,6 @@ validation/reports/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logos
+logos/
