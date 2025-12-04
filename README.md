@@ -74,7 +74,7 @@ vb_scraper/
 ├── settings/                         # Data files (JSON/text) + readmes
 │   ├── teams.json                    # 347-team master list
 │   ├── transfers.json                # Outgoing transfers
-│   ├── rpi_team_name_aliases.json    # RPI display aliases
+│   ├── teams.json                    # Master team list + URLs + aliases (incl. RPI)
 │   ├── incoming_players_YYYY.txt     # Year-specific incoming text (2025/26/27…)
 │   ├── manual_rosters.csv, MANUAL_ROSTERS_README.md, INCOMING_PLAYERS_README.md
 ├── scripts/                          # Utility/ops scripts + loaders
@@ -180,7 +180,7 @@ All tests are designed to work with or without optional dependencies.
 
 - **Teams**: `settings/teams.json` (fields: team, conference, url, stats_url)
 - **Transfers**: `settings/transfers.json` (fields: name, old_team, new_team)
-- **RPI aliases**: `settings/rpi_team_name_aliases.json`
+- **RPI aliases**: Now embedded in `settings/teams.json` under `team_name_aliases`
 - **Incoming players**: `settings/incoming_players_YYYY.txt` (conference headers + `Name - School - Position (Club)`)
 
 Loaders in `scripts/` read these JSON/text files; `settings/__init__.py` re-exports `TEAMS`, `OUTGOING_TRANSFERS`, `RPI_TEAM_NAME_ALIASES`, and `RAW_INCOMING_TEXT` for backward compatibility. The incoming players selector in `scripts/incoming_players_data.py` chooses the correct year automatically (Aug 1–Jul 31 logic). See `settings/INCOMING_PLAYERS_README.md` for format details.

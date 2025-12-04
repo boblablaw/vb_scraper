@@ -32,7 +32,7 @@ vb_scraper/
 ├── settings/               # Configuration data
 │   ├── teams_urls.py
 │   ├── transfers_config.py
-│   ├── rpi_team_name_aliases.py
+│   ├── (aliases now in settings/teams.json under team_name_aliases)
 │   ├── incoming_players_data.py
 │   ├── incoming_players_data_2025.py
 │   ├── incoming_players_data_2026.py
@@ -258,7 +258,7 @@ validation/reports/problem_teams_*.txt
 **`settings/`** — Configuration directory containing:
 - `teams_urls.py` — Master list of D1 teams with base URLs and year-based URL generation logic
 - `transfers_config.py` — Hardcoded list of outgoing transfers
-- `rpi_team_name_aliases.py` — Maps official team names to RPI names when they differ (e.g., "University at Albany" → "Albany")
+- RPI aliases — stored in `settings/teams.json` under `team_name_aliases`
 - `incoming_players_data.py` — Automatic year selector that routes to appropriate year-specific data file
 - `incoming_players_data_YYYY.py` — Year-specific raw text data of incoming players (freshmen and transfers) by conference
 - `INCOMING_PLAYERS_README.md` — Documentation for incoming players data format and maintenance
@@ -401,7 +401,7 @@ See `settings/INCOMING_PLAYERS_README.md` for detailed instructions. Use `script
 {"name": "Player Name", "old_team": "Old School", "new_team": "New School"}
 ```
 
-**RPI name mismatches**: If a team's official name doesn't match the RPI listing, add an alias to `RPI_TEAM_NAME_ALIASES` in `settings/rpi_team_name_aliases.py`.
+**RPI name mismatches**: Add aliases to `team_name_aliases` within `settings/teams.json`.
 
 ## Dependencies
 

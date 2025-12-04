@@ -43,7 +43,7 @@ Tests that configuration data is correctly accessible from the settings package.
 **Test Cases:**
 - `test_teams_list_import` - Verifies TEAMS list structure and accessibility
 - `test_outgoing_transfers_import` - Verifies OUTGOING_TRANSFERS list structure
-- `test_rpi_team_name_aliases_import` - Verifies RPI_TEAM_NAME_ALIASES dictionary structure
+- `test_rpi_team_name_aliases_import` - Verifies RPI_TEAM_NAME_ALIASES derived from `settings/teams.json`
 - `test_raw_incoming_text_import` - Verifies RAW_INCOMING_TEXT string structure
 - `test_all_exports_in_all` - Verifies __all__ contains expected exports
 
@@ -75,7 +75,7 @@ Tests consistency and relationships between different settings data.
 The test suite covers:
 
 ✅ **Settings Package Structure**
-- Configuration files (teams_urls.py, transfers_config.py, rpi_team_name_aliases.py, incoming_players_data.py, year-specific incoming_players_data_YYYY.py)
+- Configuration files (teams_urls.py, transfers_config.py, incoming_players_data.py, year-specific incoming_players_data_YYYY.py)
 - Package __init__.py exports
 - Data types and structure validation
 - Year-based URL and incoming players systems
