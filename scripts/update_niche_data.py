@@ -120,11 +120,11 @@ def extract_summary(soup: BeautifulSoup) -> str:
     return p.get_text(strip=True) if p else ""
 
 
-def extract_reviews(slug: str) -> tuple[str, str]:
+def extract_reviews(slug: str, headless: bool = True, proxy: Optional[str] = None) -> tuple[str, str]:
     url = f"https://www.niche.com/colleges/{slug}/reviews/"
     html = fetch_html(url)
     if not html:
-        html = fetch_html_playwright(url, headless=True)
+        html = fetch_html_playwright(url, headless=headless, proxy=proxy)
     if not html:
         return "", ""
     soup = BeautifulSoup(html, "html.parser")
@@ -161,7 +161,7 @@ def score_to_label(score: float) -> str:
     return "very liberal"
 
 
-def extract_politics_label(slug: str) -> str:
+def extract_politics_label(slug: str, headless: bool = True, proxy: Optional[str] = None) -> str:
     """
     Best-effort parse of politics distribution from Niche students page.
     Looks for label + percent pairs, computes weighted score.
@@ -169,7 +169,7 @@ def extract_politics_label(slug: str) -> str:
     url = f"https://www.niche.com/colleges/{slug}/students/"
     html = fetch_html(url)
     if not html:
-        html = fetch_html_playwright(url, headless=True)
+        html = fetch_html_playwright(url, headless=headless, proxy=proxy)
     if not html:
         return ""
 
@@ -194,7 +194,7 @@ def extract_politics_label(slug: str) -> str:
     return score_to_label(score)
 
 
-def update_team(team: dict) -> bool:
+def update_team(team: dict, headless: bool = True, proxy: Optional[str] = None) -> bool | str:
     slug = team.get("niche_data_slug")
     if not slug:
         return False
@@ -202,7 +202,7 @@ def update_team(team: dict) -> bool:
     url = f"https://www.niche.com/colleges/{slug}/"
     html = fetch_html(url)
     if not html:
-        html = fetch_html_playwright(url)
+        html = fetch_html_playwright(url, headless=headless, proxy=proxy)
     if not html:
         return "no_html"
 
@@ -217,7 +217,7 @@ def update_team(team: dict) -> bool:
     niche["value_grade"] = extract_grade(text, "Value") or niche.get("value_grade", "")
     niche["summary"] = extract_summary(soup) or niche.get("summary", "")
 
-    pos, neg = extract_reviews(slug)
+    pos, neg = extract_reviews(slug, headless=headless, proxy=proxy)
     if pos:
         niche["review_pos"] = pos
     if neg:
@@ -226,9 +226,9 @@ def update_team(team: dict) -> bool:
     team["niche"] = niche
 
     # Update politics label (best effort; leave untouched if not found)
-    politics_label = extract_politics_label(slug)
+    politics_label = extract_politics_label(slug, headless=headless, proxy=proxy)
     if not politics_label:
-        politics_label = extract_politics_label(slug)  # second try if first fetch cached None
+        politics_label = extract_politics_label(slug, headless=headless, proxy=proxy)  # second try if first fetch cached None
     if politics_label:
         team["political_label"] = politics_label
 
@@ -242,6 +242,8 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Print per-team status")
     parser.add_argument("--team", action="append", dest="teams_filter", help="Only update specific team(s); can be used multiple times")
     parser.add_argument("--cookie", type=str, help="Cookie header to use for Niche requests (for bypassing bot protection)")
+    parser.add_argument("--headful", action="store_true", help="Run Playwright non-headless (may help with bot checks)")
+    parser.add_argument("--proxy", type=str, help="Optional proxy server for Playwright (e.g., http://host:port)")
     args = parser.parse_args()
 
     global COOKIE_STR
@@ -258,7 +260,7 @@ def main():
 
     for team in targets:
         name = team.get("team")
-        changed = update_team(team)
+        changed = update_team(team, headless=not args.headful, proxy=args.proxy)
         if changed == "no_html":
             missing.append(name)
             if args.verbose:
