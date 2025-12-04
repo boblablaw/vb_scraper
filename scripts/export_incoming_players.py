@@ -27,17 +27,12 @@ def get_incoming_players_for_year(year):
     Returns:
         str: Raw incoming text for the specified year
     """
-    try:
-        import importlib
-        module_name = f'incoming_players_data_{year}'
-        module = importlib.import_module(f'settings.{module_name}')
-        raw_text = getattr(module, f'RAW_INCOMING_TEXT_{year}')
-        return raw_text
-    except (ImportError, AttributeError) as e:
+    path = Path(f"settings/incoming_players_{year}.txt")
+    if not path.exists():
         print(f"Error: Could not load incoming players data for {year}", file=sys.stderr)
-        print(f"Make sure settings/incoming_players_data_{year}.py exists", file=sys.stderr)
-        print(f"Details: {e}", file=sys.stderr)
+        print(f"Missing file: {path}", file=sys.stderr)
         sys.exit(1)
+    return path.read_text(encoding="utf-8")
 
 
 def export_to_csv(players, output_file):
@@ -64,7 +59,7 @@ def export_to_csv(players, output_file):
 
 def get_current_year():
     """Get the year that would be automatically selected."""
-    from settings.incoming_players_data import get_incoming_players_year
+    from scripts.incoming_players_data import get_incoming_players_year
     return get_incoming_players_year()
 
 
@@ -86,7 +81,7 @@ Examples:
   # List available years
   python scripts/export_incoming_players.py --list
 
-Available years are determined by which incoming_players_data_YYYY.py files exist
+Available years are determined by which incoming_players_YYYY.txt files exist
 in the settings/ directory.
         """
     )
@@ -113,19 +108,18 @@ in the settings/ directory.
     # Handle --list
     if args.list:
         import glob
-        files = glob.glob('settings/incoming_players_data_*.py')
-        files = [f for f in files if f != 'settings/incoming_players_data.py']  # Exclude selector
-        
+        files = glob.glob('settings/incoming_players_*.txt')
+
         if files:
             print("Available incoming players data files:")
             for f in sorted(files):
-                year = f.replace('settings/incoming_players_data_', '').replace('.py', '')
+                year = f.replace('settings/incoming_players_', '').replace('.txt', '')
                 print(f"  - {year}")
-            
+
             current = get_current_year()
-            print(f"\nCurrent year (auto-selected): {current}")
+            print(f\"\nCurrent year (auto-selected): {current}\")
         else:
-            print("No incoming players data files found")
+            print(\"No incoming_players_YYYY.txt files found\")
         return
     
     # Determine year to use

@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from io import StringIO
 from urllib.parse import urljoin
+import json
 
 from .utils import canonical_name, normalize_text
 from .logging_utils import get_logger
@@ -66,12 +67,127 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
     Fetch a stats page and return a list of pandas DataFrames.
 
     Behavior:
+      0) If the URL is the ACC services endpoint (conf_stats.ashx), fetch JSON and
+         build a DataFrame from the returned player stats.
+      0b) If the URL is a BoostSport/engage-api JSON endpoint, fetch JSON and map
+          metrics to a stats table.
       1) If SIDEARM NextGen "s-table--player-stats" is detected, try to use
          offensiveStats / defensiveStats tables via pick_sidearm_offense_defense_tables.
       2) Otherwise, fall back to pd.read_html over the whole page.
     """
     if not url:
         return None
+
+    # BoostSport JSON service (Big Ten engage-api.boostsport.ai)
+    if "boostsport.ai" in url:
+        try:
+            logger.info("Fetching BoostSport JSON stats: %s", url)
+            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            players = data.get("data", [])
+            if not players:
+                logger.warning("BoostSport stats JSON returned no players.")
+                return []
+
+            rows: List[Dict[str, Any]] = []
+            for p in players:
+                metrics_list = p.get("data", []) or []
+                metric_map = {}
+                for m in metrics_list:
+                    if isinstance(m, dict):
+                        metric_map.update(m)
+
+                rows.append({
+                    # Match the standard stat headers used elsewhere
+                    "Player": p.get("full_name", ""),
+                    "MS": "",  # matches_started not provided
+                    "MP": metric_map.get("gp", ""),
+                    "SP": metric_map.get("periods", ""),
+                    "PTS": metric_map.get("points", ""),
+                    "PTS/S": metric_map.get("points_per_set", ""),
+                    "K": metric_map.get("kills", ""),
+                    "K/S": metric_map.get("kills_per_set", ""),
+                    "AE": metric_map.get("errors", ""),  # attack errors not provided; leave blank
+                    "TA": metric_map.get("attempts", ""),
+                    "HIT%": metric_map.get("hitting_pct", ""),
+                    "A": metric_map.get("assists", ""),
+                    "A/S": metric_map.get("assists_per_set", ""),
+                    "SA": metric_map.get("aces", ""),
+                    "SA/S": metric_map.get("aces_per_set", ""),
+                    "SE": "",  # service errors not provided
+                    "D": metric_map.get("digs", ""),
+                    "D/S": metric_map.get("dig_per_set", ""),
+                    "RE": metric_map.get("receptions", ""),
+                    "TRE": metric_map.get("attempts", ""),
+                    "Rec%": metric_map.get("receive_pct", ""),
+                    "BS": "",  # block solos not provided
+                    "BA": "",  # block assists not provided
+                    "TB": metric_map.get("blocks_pts", ""),
+                    "B/S": metric_map.get("blocks_per_set", ""),
+                    "BHE": metric_map.get("ball_handling_errors", ""),
+                })
+
+            df = pd.DataFrame(rows)
+            return [df]
+        except Exception as e:
+            logger.warning("Failed to fetch BoostSport JSON stats: %s", e)
+            return None
+
+    # ACC JSON service (used for Stanford etc.)
+    if "conf_stats.ashx" in url:
+        try:
+            logger.info("Fetching ACC JSON stats: %s", url)
+            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            players = data.get("players", [])
+            if not players:
+                logger.warning("ACC stats JSON returned no players.")
+                return []
+
+            rows: List[Dict[str, Any]] = []
+            for p in players:
+                att = p.get("attack_stats", {}) or {}
+                per = p.get("per_set_stats", {}) or {}
+                set_stats = p.get("set_stats", {}) or {}
+                serve = p.get("serve_stats", {}) or {}
+                defense = p.get("defense_stats", {}) or {}
+                block = p.get("block_stats", {}) or {}
+                misc = p.get("misc_stats", {}) or {}
+
+                rows.append({
+                    "Player": p.get("name", ""),
+                    "SP": p.get("games_played", ""),
+                    "K": att.get("kills", ""),
+                    "K/S": per.get("kills", ""),
+                    "E": att.get("errors", ""),
+                    "TA": att.get("attempts", ""),
+                    "PCT": att.get("hitting_pct", ""),
+                    "Ast": set_stats.get("assists", ""),
+                    "A/S": per.get("assists", ""),
+                    "SA": serve.get("aces", ""),
+                    "SA/S": per.get("aces", ""),
+                    "SE": serve.get("errors", ""),
+                    "PTS": misc.get("points", ""),
+                    "PTS/S": per.get("points", ""),
+                    "D": defense.get("digs", ""),
+                    "D/S": per.get("digs", ""),
+                    "RE": defense.get("receptions", ""),
+                    "TRE": defense.get("attempts", ""),
+                    "Rec%": defense.get("defense_pct", ""),
+                    "BS": block.get("solos", ""),
+                    "BA": block.get("assists", ""),
+                    "TB": block.get("total", ""),
+                    "B/S": per.get("blocks", ""),
+                    "BHE": misc.get("ball_handling_errors", ""),
+                })
+
+            df = pd.DataFrame(rows)
+            return [df]
+        except Exception as e:
+            logger.warning("Failed to fetch ACC JSON stats: %s", e)
+            return None
 
     logger.info("Fetching stats tables: %s", url)
     headers = {"User-Agent": "Mozilla/5.0 (compatible; stats-scraper/1.4)"}
@@ -425,6 +541,151 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
         if core_df is None:
             return {}
         merged_df = normalize_stats_columns(core_df)
+
+    # Harmonize defensive duplicate columns (…_def) into primary columns
+    def_to_primary = {
+        "matches_played_def": "matches_played",
+        "matches_started_def": "matches_started",
+        "points_def": "points",
+        "kills_def": "kills",
+        "kills_per_set_def": "kills_per_set",
+        "hitting_pct_def": "hitting_pct",
+        "attack_errors_def": "attack_errors",
+        "total_attacks_def": "total_reception_attempts",  # already handled above but keep for safety
+        "assists_def": "assists",
+        "assists_per_set_def": "assists_per_set",
+        "aces_def": "aces",
+        "aces_per_set_def": "aces_per_set",
+        "service_errors_def": "service_errors",
+        "digs_def": "digs",
+        "digs_per_set_def": "digs_per_set",
+        "reception_errors_def": "reception_errors",
+        "total_reception_attempts_def": "total_reception_attempts",
+        "reception_pct_def": "reception_pct",
+        "block_solos_def": "block_solos",
+        "block_assists_def": "block_assists",
+        "total_blocks_def": "total_blocks",
+        "blocks_per_set_def": "blocks_per_set",
+        "ball_handling_errors_def": "ball_handling_errors",
+    }
+
+    for dcol, pcol in def_to_primary.items():
+        if dcol in merged_df.columns:
+            if pcol not in merged_df.columns or merged_df[pcol].isna().all():
+                merged_df[pcol] = merged_df[dcol]
+            merged_df = merged_df.drop(columns=[dcol])
+
+    # Drop any remaining _def columns to avoid duplicate outputs
+    def_cols = [c for c in merged_df.columns if c.endswith("_def")]
+    if def_cols:
+        merged_df = merged_df.drop(columns=def_cols)
+
+    # Standardize column names to canonical internal headers (snake_case)
+    canon_map = {
+        "player": "player",
+        "matches_played": "matches_played",
+        "mp": "matches_played",
+        "matches_started": "matches_started",
+        "ms": "matches_started",
+        "points": "points",
+        "points_per_set": "points_per_set",
+        "pts": "points",
+        "pts/s": "points_per_set",
+        "kills": "kills",
+        "kills_per_set": "kills_per_set",
+        "k": "kills",
+        "k/s": "kills_per_set",
+        "attack_errors": "attack_errors",
+        "ae": "attack_errors",
+        "total_attacks": "total_attacks",
+        "ta": "total_attacks",
+        "hitting_pct": "hitting_pct",
+        "pct": "hitting_pct",
+        "hit%": "hitting_pct",
+        "assists": "assists",
+        "ast": "assists",
+        "assists_per_set": "assists_per_set",
+        "a/s": "assists_per_set",
+        "aces": "aces",
+        "sa": "aces",
+        "aces_per_set": "aces_per_set",
+        "sa/s": "aces_per_set",
+        "service_errors": "service_errors",
+        "se": "service_errors",
+        "digs": "digs",
+        "d": "digs",
+        "digs_per_set": "digs_per_set",
+        "d/s": "digs_per_set",
+        "reception_errors": "reception_errors",
+        "re": "reception_errors",
+        "total_reception_attempts": "total_reception_attempts",
+        "tre": "total_reception_attempts",
+        "reception_pct": "reception_pct",
+        "rec%": "reception_pct",
+        "block_solos": "block_solos",
+        "bs": "block_solos",
+        "block_assists": "block_assists",
+        "ba": "block_assists",
+        "total_blocks": "total_blocks",
+        "tb": "total_blocks",
+        "blocks_per_set": "blocks_per_set",
+        "b/s": "blocks_per_set",
+        "ball_handling_errors": "ball_handling_errors",
+        "bhe": "ball_handling_errors",
+    }
+
+    rename_map = {}
+    for col in merged_df.columns:
+        key = col.lower()
+        if key in canon_map:
+            rename_map[col] = canon_map[key]
+    merged_df = merged_df.rename(columns=rename_map)
+
+    # Consolidate duplicate columns after renaming (keep first non-null per row)
+    final_cols = []
+    to_drop = []
+    for col in merged_df.columns:
+        if col in final_cols:
+            continue
+        dups = [c for c in merged_df.columns if c == col]
+        if len(dups) > 1:
+            merged_df[col] = merged_df[dups].bfill(axis=1).iloc[:, 0]
+            to_drop.extend([c for c in dups if c != col])
+        final_cols.append(col)
+    if to_drop:
+        merged_df = merged_df.drop(columns=to_drop)
+
+    # Keep only canonical columns plus player
+    preferred_order = [
+        "player",
+        "matches_started",
+        "matches_played",
+        "sets_played",
+        "points",
+        "points_per_set",
+        "kills",
+        "kills_per_set",
+        "attack_errors",
+        "total_attacks",
+        "hitting_pct",
+        "assists",
+        "assists_per_set",
+        "aces",
+        "aces_per_set",
+        "service_errors",
+        "digs",
+        "digs_per_set",
+        "reception_errors",
+        "total_reception_attempts",
+        "reception_pct",
+        "block_solos",
+        "block_assists",
+        "total_blocks",
+        "blocks_per_set",
+        "ball_handling_errors",
+    ]
+    merged_df = merged_df[[c for c in merged_df.columns if c in preferred_order]]
+    merged_df = merged_df.dropna(how="all")
 
     merged_df = merged_df.dropna(how="all")
 

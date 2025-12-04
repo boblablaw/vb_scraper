@@ -35,7 +35,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scraper.utils import normalize_school_key
-from settings.teams import TEAMS
+from scripts.teams_loader import load_teams
 
 # ---------------- CONFIG ----------------
 
@@ -474,7 +474,7 @@ def fetch_team_site_logo_url(team_name: str) -> str:
 
 def main(selected_teams: list[str] | None = None):
     # Use configured team list instead of scraping Wikipedia so we skip Commons entirely.
-    schools = sorted({t["team"] for t in TEAMS})
+    schools = sorted({t["team"] for t in load_teams()})
     if selected_teams:
         wanted = {normalize_school_key(t) for t in selected_teams}
         schools = [s for s in schools if normalize_school_key(s) in wanted]

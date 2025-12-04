@@ -33,6 +33,14 @@ NON_PLAYER_KEYWORDS = [
     'coach', 'assistant', 'director', 'coordinator', 'manager', 
     'trainer', 'admin', 'staff', 'volunteer', 'graduate assistant'
 ]
+# Primary stat columns expected in exports
+STAT_COLUMNS = [
+    'MS', 'MP', 'SP', 'PTS', 'PTS/S', 'K', 'K/S', 'AE', 'TA', 'HIT%',
+    'A', 'A/S', 'SA', 'SA/S', 'SE', 'D', 'D/S', 'RE', 'TRE', 'Rec%',
+    'BS', 'BA', 'TB', 'B/S', 'BHE'
+]
+# Defensive/digs-focused columns (any populated value counts as present)
+DIG_COLUMNS = ['D', 'D/S', 'digs_def', 'digs_per_set_def']
 
 class DataValidator:
     def __init__(self, csv_path: str, log_path: str = None):
@@ -435,6 +443,71 @@ class DataValidator:
                     print(f"    - {issue}")
         else:
             print("✓ All teams have good data quality")
+
+    def check_stats_completeness(self):
+        """Detect teams missing overall stats or defensive digs."""
+        print("\n=== Checking Stats Completeness ===")
+
+        stat_cols = [c for c in STAT_COLUMNS if c in self.df.columns]
+        dig_cols = [c for c in DIG_COLUMNS if c in self.df.columns]
+
+        missing_stats_teams = []
+        missing_digs_teams = []
+
+        for team_name in self.df['Team'].unique():
+            team_df = self.df[self.df['Team'] == team_name]
+
+            def has_data(cols):
+                """Return True if any column in cols has at least one non-empty value."""
+                if not cols:
+                    return False
+                for col in cols:
+                    if col not in team_df.columns:
+                        continue
+                    series = team_df[col]
+                    # Drop NaN, then check for any non-empty string after stripping
+                    cleaned = series.dropna().astype(str).str.strip()
+                    cleaned = cleaned[cleaned.str.lower() != 'nan']
+                    if not cleaned.empty and (cleaned != '').any():
+                        return True
+                return False
+
+            if not has_data(stat_cols):
+                missing_stats_teams.append(team_name)
+                self.team_issues[team_name].append("No player stat columns populated")
+
+            if not has_data(dig_cols):
+                missing_digs_teams.append(team_name)
+                self.team_issues[team_name].append("Missing digs (defensive stats)")
+
+        self.stats['teams_missing_stats'] = len(missing_stats_teams)
+        self.stats['teams_missing_digs'] = len(missing_digs_teams)
+        self.issues['teams_missing_stats'] = sorted(missing_stats_teams)
+        self.issues['teams_missing_digs'] = sorted(missing_digs_teams)
+
+        reports_dir = os.path.join("validation", "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        if missing_stats_teams:
+            stats_path = os.path.join(reports_dir, f"missing_stats_{timestamp}.txt")
+            with open(stats_path, "w") as f:
+                f.write(f"# Teams with no stats columns populated ({len(missing_stats_teams)})\n\n")
+                for team in sorted(missing_stats_teams):
+                    f.write(team + "\n")
+            print(f"⚠️  {len(missing_stats_teams)} teams have no stats; list written to {stats_path}")
+        else:
+            print("✓ All teams have some stat data")
+
+        if missing_digs_teams:
+            digs_path = os.path.join(reports_dir, f"missing_defensive_stats_{timestamp}.txt")
+            with open(digs_path, "w") as f:
+                f.write(f"# Teams missing digs (defensive stats) ({len(missing_digs_teams)})\n\n")
+                for team in sorted(missing_digs_teams):
+                    f.write(team + "\n")
+            print(f"⚠️  {len(missing_digs_teams)} teams missing digs; list written to {digs_path}")
+        else:
+            print("✓ All teams have digs recorded")
     
     def analyze_log_file(self):
         """Analyze scraper log for errors and warnings."""
@@ -551,7 +624,9 @@ class DataValidator:
             f.write(f"- Failed class normalization: {self.stats.get('failed_class_normalization', 0)}\n")
             f.write(f"- Suspected non-players: {self.stats['suspected_non_players']}\n")
             f.write(f"- Duplicate players: {self.stats['duplicate_players']}\n")
-            f.write(f"- Teams with issues: {self.stats['teams_with_issues']}\n\n")
+            f.write(f"- Teams with issues: {self.stats['teams_with_issues']}\n")
+            f.write(f"- Teams missing stats: {self.stats.get('teams_missing_stats', 0)}\n")
+            f.write(f"- Teams missing digs: {self.stats.get('teams_missing_digs', 0)}\n\n")
 
             if self.issues.get('missing_position_players'):
                 f.write("## Players Missing Positions\n\n")
@@ -670,6 +745,18 @@ class DataValidator:
                     f.write(f"- {team}\n")
                 f.write(f"\nTotal missing teams listed: {len(missing_list)}\n")
                 f.write("\n")
+
+            if self.issues.get('teams_missing_stats'):
+                f.write("## Teams With No Stats\n\n")
+                for team in self.issues['teams_missing_stats']:
+                    f.write(f"- {team}\n")
+                f.write(f"\nTotal teams with no stats: {self.stats.get('teams_missing_stats', 0)}\n\n")
+
+            if self.issues.get('teams_missing_digs'):
+                f.write("## Teams Missing Digs (Defensive Stats)\n\n")
+                for team in self.issues['teams_missing_digs']:
+                    f.write(f"- {team}\n")
+                f.write(f"\nTotal teams missing digs: {self.stats.get('teams_missing_digs', 0)}\n\n")
             
             if self.issues.get('teams_with_scrape_errors'):
                 f.write("## Teams with Scraping Errors\n\n")
@@ -728,6 +815,7 @@ class DataValidator:
         self.detect_non_players()
         self.check_duplicates()
         self.validate_team_data()
+        self.check_stats_completeness()
         self.check_missing_teams()
         self.analyze_log_file()
         

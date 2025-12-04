@@ -71,11 +71,15 @@ vb_scraper/
 │   └── merge_manual_stats.py         # Manual stats merge utility
 ├── scraper/                          # Core scraping modules
 │   ├── roster.py, stats.py, team_analysis.py, coaches.py, transfers.py, rpi_lookup.py, utils.py, logging_utils.py, incoming_players.py
-├── settings/                         # Configuration + seed data
-│   ├── teams.py, teams_urls.py, transfers_config.py, rpi_team_name_aliases.py
-│   ├── incoming_players_data.py + incoming_players_data_YYYY.py
+├── settings/                         # Data files (JSON/text) + readmes
+│   ├── teams.json                    # 347-team master list
+│   ├── transfers.json                # Outgoing transfers
+│   ├── rpi_team_name_aliases.json    # RPI display aliases
+│   ├── incoming_players_YYYY.txt     # Year-specific incoming text (2025/26/27…)
 │   ├── manual_rosters.csv, MANUAL_ROSTERS_README.md, INCOMING_PLAYERS_README.md
-├── scripts/                          # Utility/ops scripts
+├── scripts/                          # Utility/ops scripts + loaders
+│   ├── teams_loader.py, transfers_loader.py, rpi_aliases_loader.py, teams_urls.py
+│   ├── incoming_players_data.py      # Date-based selector for incoming text files
 │   ├── run_full_pipeline.py, validate_exports.py, export_incoming_players.py, parse_ncaa_pdf_stats.py
 │   ├── download_sidearm_pdfs.py, fetch_coaches.py, snapshot_html.py, find_vb_stats_pdfs.py
 │   ├── compare_export_to_teams.py, summarize_vb_pdfs_coverage.py, browser_automation_poc.py
@@ -172,37 +176,14 @@ The test suite verifies:
 
 All tests are designed to work with or without optional dependencies.
 
-## Configuration
+## Configuration (data files)
 
-### Adding Teams
+- **Teams**: `settings/teams.json` (fields: team, conference, url, stats_url)
+- **Transfers**: `settings/transfers.json` (fields: name, old_team, new_team)
+- **RPI aliases**: `settings/rpi_team_name_aliases.json`
+- **Incoming players**: `settings/incoming_players_YYYY.txt` (conference headers + `Name - School - Position (Club)`)
 
-Edit `settings/teams.py`:
-```python
-{
-    "team": "University Name",
-    "conference": "Conference Name",
-    "url": "https://...",
-    "stats_url": "https://..."
-}
-```
-
-### Adding Transfers
-
-Edit `settings/transfers_config.py`:
-```python
-{"name": "Player Name", "old_team": "Old School", "new_team": "New School"}
-```
-
-### Adding Incoming Players
-
-Edit the appropriate year file (e.g., `settings/incoming_players_data_2025.py`):
-```
-Conference Name:
-Player Name - School Name - Position (Club)
-```
-
-The system automatically selects the correct year based on the date (Aug 1 - Jul 31 cycle).
-See `settings/INCOMING_PLAYERS_README.md` for details.
+Loaders in `scripts/` read these JSON/text files; `settings/__init__.py` re-exports `TEAMS`, `OUTGOING_TRANSFERS`, `RPI_TEAM_NAME_ALIASES`, and `RAW_INCOMING_TEXT` for backward compatibility. The incoming players selector in `scripts/incoming_players_data.py` chooses the correct year automatically (Aug 1–Jul 31 logic). See `settings/INCOMING_PLAYERS_README.md` for format details.
 
 ### Manual Rosters
 

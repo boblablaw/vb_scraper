@@ -8,7 +8,7 @@ import time
 import os
 from typing import Any, Dict, List
 
-from settings.teams_urls import get_teams_with_year_urls, get_season_year
+from scripts.teams_urls import get_teams_with_year_urls, get_season_year
 from scraper.team_analysis import analyze_team
 from scraper.logging_utils import setup_logging, get_logger
 

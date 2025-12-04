@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export transfers from transfers_config.py to CSV file."""
+"""Export transfers from transfers.json to CSV file."""
 
 import csv
 import os

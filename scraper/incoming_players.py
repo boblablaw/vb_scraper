@@ -59,7 +59,7 @@ def normalize_school_key(name: str) -> str:
 #   - Now imported from settings/incoming_players_data.py
 # =========================================================
 
-from settings.incoming_players_data import RAW_INCOMING_TEXT
+from settings import RAW_INCOMING_TEXT
 
 
 # =========================================================

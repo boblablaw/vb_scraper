@@ -9,7 +9,7 @@ from io import StringIO
 
 from bs4 import BeautifulSoup, Tag
 
-from .utils import normalize_text, fetch_html
+from .utils import normalize_text, fetch_html, normalize_class
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -102,9 +102,20 @@ def is_impact_position(position: str) -> bool:
     return "impact" in (position or "").lower()
 
 
+def is_impact_high_school(high_school: str) -> bool:
+    """
+    TEAM IMPACT entries sometimes appear in high school fields (e.g., 'Team IMPACT').
+    """
+    return "team impact" in (high_school or "").lower()
+
+
 def filter_impact_players(players: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """Remove TEAM IMPACT entries from a parsed player list."""
-    filtered = [p for p in players if not is_impact_position(p.get("position", ""))]
+    filtered = [
+        p for p in players
+        if not is_impact_position(p.get("position", ""))
+        and not is_impact_high_school(p.get("high_school", ""))
+    ]
     removed = len(players) - len(filtered)
     if removed:
         logger.info("Filtered %d TEAM IMPACT entries from roster parse.", removed)
@@ -118,6 +129,10 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
     <dl><dd>value</dd><dt>Label</dt></dl> blocks on the player page.
     """
     soup = BeautifulSoup(html, "html.parser")
+
+    # Remove script/style blobs that can pollute extracted text
+    for bad in soup.find_all(["script", "style"]):
+        bad.decompose()
     details: Dict[str, str] = {}
 
     # Common header fields on profile pages
@@ -145,6 +160,16 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
             val = normalize_text(class_tag.get_text())
             if val:
                 details["class_raw"] = val
+    if not details.get("class_raw"):
+        # Sidearm sometimes renders screen-reader-only label followed by value span
+        for node in soup.find_all(string=lambda t: isinstance(t, str) and "Academic Year" in t):
+            parent = node.parent
+            sib = parent.find_next_sibling()
+            if sib:
+                val = normalize_text(sib.get_text())
+                if val:
+                    details["class_raw"] = val
+                    break
 
     if not details.get("height_raw"):
         height_tag = soup.select_one(
@@ -178,7 +203,7 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
 
         if "position" in label and "position" not in details:
             details["position"] = value
-        elif "class" in label and "class_raw" not in details:
+        elif ("class" in label or "academic year" in label) and "class_raw" not in details:
             details["class_raw"] = value
         elif "height" in label and "height_raw" not in details:
             details["height_raw"] = value
@@ -194,7 +219,7 @@ def enrich_from_player_profiles(players: List[Dict[str, str]], base_url: str) ->
     enriched = 0
     for p in players:
         needs_position = not p.get("position")
-        needs_class = not p.get("class_raw")
+        needs_class = (not p.get("class_raw")) or (normalize_class(p.get("class_raw", "")) == "")
         needs_height = not p.get("height_raw")
         if not (needs_position or needs_class or needs_height):
             continue
@@ -382,6 +407,11 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
             if len(cells) < 2:
                 continue
 
+            # Strip script/style blobs that can pollute text (e.g., injected __NUXT__ config)
+            for c in cells:
+                for bad in c.find_all(["script", "style"]):
+                    bad.decompose()
+
             texts = [normalize_text(c.get_text()) for c in cells]
 
             def get(idx: Optional[int]) -> str:
@@ -412,7 +442,8 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
             
             # Skip if position contains staff keywords
             staff_keywords = ['director', 'coordinator', 'trainer', 'advisor', 'communications', 
-                            'operations', 'strength', 'conditioning', 'manager', 'admin']
+                            'operations', 'strength', 'conditioning', 'manager', 'admin',
+                            'video', 'creative']
             if any(kw in lower_pos for kw in staff_keywords):
                 continue
 
@@ -721,6 +752,31 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                                 m = re.search(r"[4-7]['\\-]\\s?\\d{1,2}", v)
                                 if m:
                                     return m.group(0).replace("'", "-").replace(" ", "")
+                            elif isinstance(v, (int, float)):
+                                # skip plain numbers
+                                continue
+                            elif isinstance(v, dict):
+                                h = find_height(v)
+                                if h:
+                                    return h
+                        return ""
+                    
+                    def find_height_loose(obj) -> str:
+                        if not isinstance(obj, dict):
+                            return ""
+                        # common keys: height, height_feet_inches, heightInches
+                        for k, v in obj.items():
+                            lk = str(k).lower()
+                            if "height" in lk:
+                                if isinstance(v, str):
+                                    if HEIGHT_RE.search(v):
+                                        return HEIGHT_RE.search(v).group(0)
+                                    m = re.search(r"[4-7]['\\-]\\s?\\d{1,2}", v)
+                                    if m:
+                                        return m.group(0).replace("'", "-").replace(" ", "")
+                                elif isinstance(v, (int, float)):
+                                    # single number can't give both feet/inches
+                                    continue
                         return ""
                     
                     # Extract data with safe handling
@@ -732,11 +788,20 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                         continue
                     
                     # Height
-                    height_feet = resolve(player_obj.get('height_feet', '')) or ''
-                    height_inches = resolve(player_obj.get('height_inches', '')) or ''
-                    height_raw = f"{height_feet}-{height_inches}" if height_feet and height_inches else ''
+                    height_feet = resolve(player_obj.get('height_feet', ''))
+                    height_inches = resolve(player_obj.get('height_inches', ''))
+                    # Accept 0 inches as valid; only treat None/'' as missing
+                    if height_feet not in (None, '') and height_inches not in (None, ''):
+                        height_raw = f"{height_feet}-{height_inches}"
+                    else:
+                        height_raw = ''
                     if not height_raw:
-                        height_raw = find_height(player_obj) or find_height(player_info)
+                        height_raw = (
+                            find_height(player_obj)
+                            or find_height(player_info)
+                            or find_height_loose(player_obj)
+                            or find_height_loose(player_info)
+                        )
 
                     profile_url = ""
                     if isinstance(player_info, dict):

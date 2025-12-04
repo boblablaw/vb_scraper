@@ -391,8 +391,8 @@ def main():
     print()
     
     # Load team list for intelligent matching
-    from settings.teams import TEAMS
-    all_team_names = [t['team'] for t in TEAMS]
+    from scripts.teams_loader import load_teams
+    all_team_names = [t['team'] for t in load_teams()]
     
     # Group files by team
     team_files = {}

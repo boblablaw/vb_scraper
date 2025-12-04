@@ -1,11 +1,11 @@
 # Manual Roster Data
 
-For teams with JavaScript-rendered rosters that can't be scraped automatically, you can manually enter roster data in `manual_rosters.csv`.
+For teams with JavaScript-rendered or blocked rosters that can't be scraped automatically, you can manually enter roster data in `settings/manual_rosters.csv`.
 
 ## Quick Start
 
 1. **Edit `manual_rosters.csv`** - Add player data for teams that failed to scrape
-2. **Run merge script** - `python merge_manual_rosters.py`
+2. **Run merge script** - `python -m src.merge_manual_rosters`
 3. **Done!** - Manual data is now included in the main export
 
 ## File Format
@@ -21,7 +21,7 @@ University of Arkansas,Sarah Johnson,MB,Sr,6-3
 
 ### Required Columns
 
-- **Team** - Exact team name (must match `settings/teams.py`)
+- **Team** - Exact team name (must match `settings/teams.json`)
 - **Name** - Player's full name
 - **Position** - Position code(s): S, OH, RS, MB, DS, L
 - **Class** - Class year: Fr, So, Jr, Sr, R-Fr, R-So, R-Jr, R-Sr, Gr
@@ -30,7 +30,7 @@ University of Arkansas,Sarah Johnson,MB,Sr,6-3
 ### Tips
 
 - Leave template rows with empty names - they'll be ignored
-- Use exact team names from the failed teams list
+- Use exact team names from `settings/teams.json`
 - Position codes are flexible: OH, OH/RS, S/DS all work
 - Heights can be 6-2, 6'2, 6′2″ - they'll be normalized
 
@@ -62,22 +62,18 @@ University of Alabama,Jessica Brown,MB,Fr,6-3
 Run the merge script:
 
 ```bash
-python merge_manual_rosters.py
+python -m src.merge_manual_rosters
 ```
 
 This will:
 - Load manual roster data
 - Remove any existing data for manual teams from scraped export
 - Add manual roster entries with proper structure
-- Write updated export to `exports/d1_rosters_2026_with_stats_and_incoming.tsv`
+- Write updated export (see console output for the exact file name)
 
 ### 4. Regenerate Display CSV
 
-After merging, regenerate the display CSV:
-
-```bash
-python create_display_csv.py
-```
+After merging, regenerate any downstream outputs that depend on the roster export (e.g., `src/create_team_pivot_csv.py`).
 
 ## What Gets Populated
 
@@ -115,14 +111,6 @@ Manual teams:
   - University of Florida: 16 players
 ```
 
-## Current Status
+## Status
 
-**42 teams** with JavaScript-rendered rosters need manual data entry:
-
-**SEC (12 teams)**: Alabama, Arkansas, Florida, Georgia, Kentucky, LSU, Missouri, Oklahoma, South Carolina, Tennessee, Texas, Vanderbilt
-
-**WCC (7 teams)**: Gonzaga, Portland, San Diego, San Francisco, Santa Clara, Seattle, Washington State
-
-**Others (23 teams)**: Coastal Carolina, Denver, Furman, James Madison, Lafayette, Lamar, Le Moyne, LIU, Marshall, Mercer, Missouri-Kansas City, New Mexico, New Orleans, North Dakota, Oregon State, Pacific, South Dakota, St. Thomas, The Citadel, Troy, Utah State, Utah Tech, Wyoming
-
-See `test_data/sample_js_rendered.txt` for complete list.
+The list of teams needing manual entry changes as site structures change. Use the scraper logs or validation reports to identify current misses. A historical sample of JS-rendered teams lives at `test_data/sample_js_rendered.txt`, but treat it as a starting point, not ground truth.

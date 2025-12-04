@@ -82,7 +82,8 @@ def pack_coaches_for_row(coaches: List[Dict], max_coaches: int = 5) -> Dict[str,
         max_coaches: Maximum number of coaches to include (default: 5)
         
     Returns:
-        Dict with keys: coach1_name, coach1_title, coach1_email, coach1_phone, etc.
+        Dict with keys: coach1_name, coach1_title, coach1_email, coach1_phone,
+        coach1_start_year, coach1_seasons_at_school, etc.
     """
     result = {}
     
@@ -95,11 +96,15 @@ def pack_coaches_for_row(coaches: List[Dict], max_coaches: int = 5) -> Dict[str,
             result[f"{prefix}_title"] = coach.get("title", "")
             result[f"{prefix}_email"] = coach.get("email", "")
             result[f"{prefix}_phone"] = coach.get("phone", "")
+            result[f"{prefix}_start_year"] = coach.get("start_year", "")
+            result[f"{prefix}_seasons_at_school"] = coach.get("seasons_at_school", "")
         else:
             # Empty columns for missing coaches
             result[f"{prefix}_name"] = ""
             result[f"{prefix}_title"] = ""
             result[f"{prefix}_email"] = ""
             result[f"{prefix}_phone"] = ""
+            result[f"{prefix}_start_year"] = ""
+            result[f"{prefix}_seasons_at_school"] = ""
     
     return result

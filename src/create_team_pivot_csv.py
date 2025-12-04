@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Set
 
 import pandas as pd
 
-from settings.teams import TEAMS
-from settings.transfers_config import OUTGOING_TRANSFERS
+from scripts.teams_loader import load_teams
+from settings import OUTGOING_TRANSFERS
 from scraper.utils import (
     normalize_school_key,
     normalize_player_name,
@@ -40,51 +40,40 @@ def parse_incoming_players() -> List[Dict[str, str]]:
     Parse incoming players from RAW_INCOMING_TEXT.
     Returns list of dicts with: name, school, position
     """
-    from settings.incoming_players_data import RAW_INCOMING_TEXT
-    
+    from settings import RAW_INCOMING_TEXT
+
     players = []
     current_conf = ""
-    
+
     for line in RAW_INCOMING_TEXT.strip().split("\n"):
         line = line.strip()
         if not line:
             continue
-        
-        # Conference header ends with ":"
         if line.endswith(":"):
             current_conf = line[:-1].strip()
             continue
-        
-        # Player line format: Name - School - Position (Club)
-        # Or: Name - School - Position
         if " - " not in line:
             continue
-        
         parts = line.split(" - ")
         if len(parts) < 3:
             continue
-        
-        name = parts[0].strip()
-        school = parts[1].strip()
-        position = parts[2].strip()
-        
-        # Remove club info from position if present
+        name, school, position = parts[0].strip(), parts[1].strip(), parts[2].strip()
         if "(" in position:
             position = position.split("(")[0].strip()
-        
         players.append({
             "name": normalize_player_name(name),
             "school": school,
             "position": position,
+            "conference": current_conf,
         })
-    
+
     return players
 
 
 def get_team_info(team_name: str) -> Dict[str, Any]:
     """Get team info from settings.TEAMS."""
     team_key = normalize_school_key(team_name)
-    for t in TEAMS:
+    for t in load_teams():
         if normalize_school_key(t["team"]) == team_key:
             return t
     return {}
@@ -396,7 +385,11 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                     except:
                         pass
                 
-                coaches = parse_coaches_from_html(coaches_html)
+                coaches = parse_coaches_from_html(
+                    coaches_html,
+                    base_url=alt_coaches_url or roster_url,
+                    fetch_bios=False,
+                )
                 coach_cols = pack_coaches_for_row(coaches)
             except Exception as e:
                 logger.warning("Could not fetch coaches for %s: %s", team_name, e)

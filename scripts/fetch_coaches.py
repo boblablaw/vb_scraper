@@ -22,7 +22,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from settings.teams import TEAMS
+from scripts.teams_loader import load_teams
 from scraper.coaches import find_coaches_page_url, parse_coaches_from_html
 from scraper.utils import fetch_html, normalize_school_key
 from scraper.logging_utils import setup_logging, get_logger
@@ -33,12 +33,13 @@ logger = get_logger(__name__)
 DEFAULT_CACHE_FILE = "settings/coaches_cache.json"
 
 
-def fetch_coaches_for_team(team_info: dict) -> list:
+def fetch_coaches_for_team(team_info: dict, fetch_tenure: bool = False) -> list:
     """
     Fetch coaching staff data for a single team.
     
     Args:
         team_info: Dict with 'team', 'url', etc.
+        fetch_tenure: If True, fetch individual bio pages to estimate start year / seasons.
         
     Returns:
         List of coach dicts: [{"name": ..., "title": ..., "email": ..., "phone": ...}]
@@ -67,7 +68,11 @@ def fetch_coaches_for_team(team_info: dict) -> list:
                 logger.warning(f"  Could not fetch coaches page URL, using roster: {e}")
         
         # Parse coaches from HTML
-        coaches = parse_coaches_from_html(coaches_html)
+        coaches = parse_coaches_from_html(
+            coaches_html,
+            base_url=alt_coaches_url or roster_url,
+            fetch_bios=fetch_tenure,
+        )
         
         if coaches:
             logger.info(f"  Found {len(coaches)} coach(es)")
@@ -131,6 +136,11 @@ def main():
         action="store_true",
         help="Update cache (only fetch teams not in cache)"
     )
+    parser.add_argument(
+        "--tenure",
+        action="store_true",
+        help="Fetch coach bio pages to estimate start year and seasons at school"
+    )
     
     args = parser.parse_args()
     
@@ -148,12 +158,12 @@ def main():
         # Filter to specific teams
         team_names_normalized = {normalize_school_key(t) for t in args.teams}
         teams_to_fetch = [
-            t for t in TEAMS
+            t for t in load_teams()
             if normalize_school_key(t["team"]) in team_names_normalized
         ]
         logger.info(f"Fetching {len(teams_to_fetch)} specified team(s)")
     else:
-        teams_to_fetch = TEAMS
+        teams_to_fetch = load_teams()
         logger.info(f"Fetching all {len(teams_to_fetch)} D1 teams")
     
     # Filter out teams already in cache (if --update mode)
@@ -177,7 +187,7 @@ def main():
         team_name = team_info["team"]
         logger.info(f"[{i}/{len(teams_to_fetch)}] Processing: {team_name}")
         
-        coaches = fetch_coaches_for_team(team_info)
+        coaches = fetch_coaches_for_team(team_info, fetch_tenure=args.tenure)
         
         if coaches:
             cache_data["teams"][team_name] = {

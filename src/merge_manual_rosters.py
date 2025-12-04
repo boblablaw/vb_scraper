@@ -75,8 +75,8 @@ def merge_manual_with_scraped(scraped_file: str, manual_df: pd.DataFrame, output
     print()
     
     # Get conference info and URLs from settings
-    from settings.teams import TEAMS
-    team_info = {t['team']: t for t in TEAMS}
+    from scripts.teams_loader import load_teams
+    team_info = {t['team']: t for t in load_teams()}
     
     # Process manual roster entries by team
     # Strategy: For each team with manual data, update/add players by matching names

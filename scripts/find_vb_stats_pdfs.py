@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from settings.teams_urls import get_teams_with_year_urls, get_season_year
+from scripts.teams_urls import get_teams_with_year_urls, get_season_year
 
 
 DEFAULT_COVERAGE_CSV = "exports/sidearm_pdfs/sidearm_pdfs_coverage_{year}.csv"

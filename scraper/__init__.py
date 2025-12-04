@@ -19,7 +19,12 @@ from .utils import (
 
 from .roster import parse_roster
 from .stats import build_stats_lookup, attach_stats_to_player
-from .coaches import find_coaches_page_url, parse_coaches_from_html, pack_coaches_for_row
+from .coaches import (
+    find_coaches_page_url,
+    parse_coaches_from_html,
+    pack_coaches_for_row,
+    extract_tenure_from_text,
+)
 from .transfers import (
     is_outgoing_transfer,
     is_incoming_transfer,
@@ -56,6 +61,7 @@ __all__ = [
     "find_coaches_page_url",
     "parse_coaches_from_html",
     "pack_coaches_for_row",
+    "extract_tenure_from_text",
     # Transfers
     "is_outgoing_transfer",
     "is_incoming_transfer",

@@ -1,15 +1,3 @@
-# incoming_players_data_2025.py
-"""
-Incoming players (freshmen) for the 2025 season.
-
-Valid Date Range: August 1, 2024 - July 31, 2025
-
-Format:
-Conference Name:
-Player Name - School Name - Position (Club)
-"""
-
-RAW_INCOMING_TEXT_2027 = """
 America East Conference:
 Avery Banks - Bryant University - OPP (PSVA)
 Tessa Boomhour - Bryant University - MB/OPP (L2)
@@ -662,4 +650,3 @@ Makayla Ziegler - University of San Diego - OH/OPP (Tstreet)
 Bella Borgio - Santa Clara University - OH (Mintonette)
 Emery Gonzales - Santa Clara University - Setter (WAVE)
 Kaylie Klein - Santa Clara University - OH (Roots Volleyball Academy)
-""".strip()

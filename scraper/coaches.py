@@ -2,15 +2,100 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Dict, List
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from .utils import normalize_text
+from .utils import normalize_text, fetch_html
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+ORDINAL_WORDS = {
+    "first": 1,
+    "second": 2,
+    "third": 3,
+    "fourth": 4,
+    "fifth": 5,
+    "sixth": 6,
+    "seventh": 7,
+    "eighth": 8,
+    "ninth": 9,
+    "tenth": 10,
+    "eleventh": 11,
+    "twelfth": 12,
+    "thirteenth": 13,
+    "fourteenth": 14,
+    "fifteenth": 15,
+}
+
+
+def _ordinal_to_int(token: str) -> int | None:
+    """
+    Convert tokens like 'third', '3rd', '3' into an int.
+    Returns None if it cannot be parsed or is unreasonable (>50).
+    """
+    if not token:
+        return None
+
+    t = token.strip().lower()
+    t = re.sub(r"(st|nd|rd|th)$", "", t)
+
+    if t.isdigit():
+        val = int(t)
+        if 0 < val < 50:
+            return val
+        return None
+
+    return ORDINAL_WORDS.get(t)
+
+
+def extract_tenure_from_text(text: str, current_year: int | None = None) -> tuple[int | None, int | None]:
+    """
+    Best-effort extraction of start year and seasons-at-school from a bio paragraph.
+
+    Returns (start_year, seasons_at_school) where either may be None if not found.
+    """
+    if not text:
+        return (None, None)
+
+    current_year = current_year or datetime.now().year
+    body = normalize_text(text)
+
+    # Pattern: "enters her third season", "is in his 6th year", etc.
+    season_match = re.search(
+        r"(?:enter(?:ing|s)?|heading into|in|returns for|embarks on)\s+"
+        r"(?:his|her|their)?\s*"
+        r"(?P<num>\d{1,2}|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth)"
+        r"(?:st|nd|rd|th)?\s+"
+        r"(?:season|year)",
+        body,
+        flags=re.I,
+    )
+
+    seasons_at_school: int | None = None
+    start_year: int | None = None
+
+    if season_match:
+        seasons_at_school = _ordinal_to_int(season_match.group("num"))
+        if seasons_at_school and current_year:
+            start_year = current_year - seasons_at_school + 1
+
+    # Pattern: "hired in 2019", "since 2021", "joined ... in 2020"
+    if start_year is None:
+        year_match = re.search(
+            r"(?:since|hired|joined|named|promoted|appointed|took over)\s+(?:in\s+)?(20\d{2})",
+            body,
+            flags=re.I,
+        )
+        if year_match:
+            start_year = int(year_match.group(1))
+            if current_year and start_year <= current_year:
+                seasons_at_school = max(1, current_year - start_year + 1)
+
+    return (start_year, seasons_at_school)
 
 
 def find_coaches_page_url(roster_html: str, roster_url: str) -> str | None:
@@ -66,11 +151,58 @@ def find_coaches_page_url(roster_html: str, roster_url: str) -> str | None:
     return None
 
 
-def parse_coaches_from_html(html: str) -> list[dict]:
+def _find_bio_href(block) -> str | None:
+    """
+    Locate the first likely bio/profile link inside a coach block.
+    """
+    for a in block.find_all("a", href=True):
+        href = a["href"]
+        text = normalize_text(a.get_text())
+        href_low = href.lower()
+        text_low = text.lower()
+        if "bio" in text_low or "profile" in text_low:
+            return href
+        if "/coach" in href_low or "/coaches" in href_low or "/staff/" in href_low:
+            return href
+    return None
+
+
+def _enrich_with_bio(coach: dict, bio_href: str | None, base_url: str | None, fetch_bios: bool):
+    """
+    Optionally fetch a coach bio page and attach tenure info.
+    """
+    if not fetch_bios or not bio_href:
+        return
+
+    bio_url = urljoin(base_url, bio_href) if base_url else bio_href
+    if not bio_url:
+        return
+
+    try:
+        bio_html = fetch_html(bio_url)
+    except Exception as e:
+        logger.debug("Could not fetch bio %s: %s", bio_url, e)
+        return
+
+    try:
+        bio_soup = BeautifulSoup(bio_html, "html.parser")
+        bio_text = normalize_text(bio_soup.get_text(" ", strip=True))
+        start_year, seasons_at_school = extract_tenure_from_text(bio_text)
+        if start_year:
+            coach["start_year"] = start_year
+        if seasons_at_school:
+            coach["seasons_at_school"] = seasons_at_school
+        coach["bio_url"] = bio_url
+    except Exception as e:
+        logger.debug("Error parsing bio %s: %s", bio_url, e)
+
+
+def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: bool = False) -> list[dict]:
     """
     Best-effort coach scraper.
 
-    Returns a list of dicts: {"name", "title", "email", "phone"}.
+    Returns a list of dicts: {"name", "title", "email", "phone", "start_year?", "seasons_at_school?", "bio_url?"}
+    Tenure fields are filled only if `fetch_bios` is True and a coach bio link can be fetched.
     """
     soup = BeautifulSoup(html, "html.parser")
     coaches: list[dict] = []
@@ -136,15 +268,17 @@ def parse_coaches_from_html(html: str) -> list[dict]:
                 if m_phone:
                     phone = m_phone.group(0)
 
+            bio_href = _find_bio_href(block)
+
             if name:
-                coaches.append(
-                    {
-                        "name": name,
-                        "title": title,
-                        "email": email,
-                        "phone": phone,
-                    }
-                )
+                coach = {
+                    "name": name,
+                    "title": title,
+                    "email": email,
+                    "phone": phone,
+                }
+                _enrich_with_bio(coach, bio_href, base_url, fetch_bios)
+                coaches.append(coach)
 
         if coaches:
             logger.info("Parsed %d coaches from Sidearm-style blocks.", len(coaches))
@@ -338,6 +472,8 @@ def pack_coaches_for_row(coaches: List[Dict[str, str]]) -> Dict[str, str]:
         out[f"coach{idx}_title"] = ""
         out[f"coach{idx}_email"] = ""
         out[f"coach{idx}_phone"] = ""
+        out[f"coach{idx}_start_year"] = ""
+        out[f"coach{idx}_seasons_at_school"] = ""
 
     if not coaches:
         return out
@@ -347,5 +483,7 @@ def pack_coaches_for_row(coaches: List[Dict[str, str]]) -> Dict[str, str]:
         out[f"coach{idx}_title"] = normalize_text(c.get("title", ""))
         out[f"coach{idx}_email"] = normalize_text(c.get("email", ""))
         out[f"coach{idx}_phone"] = normalize_text(c.get("phone", ""))
+        out[f"coach{idx}_start_year"] = c.get("start_year", "") or ""
+        out[f"coach{idx}_seasons_at_school"] = c.get("seasons_at_school", "") or ""
 
     return out

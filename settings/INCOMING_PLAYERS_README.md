@@ -1,49 +1,31 @@
 # Incoming Players Data Management
 
-This directory contains year-specific incoming players data files that are automatically selected based on the current date.
+This directory contains year-specific incoming players data stored as plain text files that are automatically selected based on the current date.
 
 ## How It Works
 
-The `incoming_players_data.py` file automatically selects the appropriate year's data based on date ranges:
+The selector now lives in `scripts/incoming_players_data.py` (imported by `settings`). It chooses the correct text file based on date ranges:
 
 ### Date-Based Selection Rules
 
 | Date Range                | File Used                           | Data For |
 |--------------------------|-------------------------------------|----------|
-| Aug 1, 2024 - Jul 31, 2025 | `incoming_players_data_2025.py`   | 2025 season |
-| Aug 1, 2025 - Jul 31, 2026 | `incoming_players_data_2026.py`   | 2026 season |
-| Aug 1, 2026 - Jul 31, 2027 | `incoming_players_data_2027.py`   | 2027 season |
+| Aug 1, 2024 - Jul 31, 2025 | `incoming_players_2025.txt`   | 2025 season |
+| Aug 1, 2025 - Jul 31, 2026 | `incoming_players_2026.txt`   | 2026 season |
+| Aug 1, 2026 - Jul 31, 2027 | `incoming_players_2027.txt`   | 2027 season |
 
 **Logic**: If current month >= August, use next year's data. Otherwise use current year's data.
 
 ## File Structure
 
-Each year-specific file (e.g., `incoming_players_data_2025.py`) contains:
-
-```python
-# incoming_players_data_2025.py
-"""
-Incoming players (freshmen and transfers) for the 2025 season.
-
-Valid Date Range: August 1, 2024 - July 31, 2025
-"""
-
-RAW_INCOMING_TEXT_2025 = """
-Conference Name:
-Player Name - School Name - Position (Club)
-Player Name - School Name - Position (Club)
-
-Next Conference:
-Player Name - School Name - Position (Club)
-"""
-```
+Each year-specific file is plain text (e.g., `incoming_players_2026.txt`) with the contents of `RAW_INCOMING_TEXT_YYYY`.
 
 ## Adding Incoming Players Data
 
 ### For Current/Active Season
 
 1. Identify which file is currently active (check date against table above)
-2. Edit the appropriate `incoming_players_data_YYYY.py` file
+2. Edit the appropriate `incoming_players_YYYY.txt` file
 3. Add players in the format:
    ```
    Conference Name:
@@ -52,22 +34,12 @@ Player Name - School Name - Position (Club)
 
 ### For Future Season
 
-1. Create a new file: `incoming_players_data_YYYY.py` where YYYY is the year
+1. Create a new file: `incoming_players_YYYY.txt` where YYYY is the year
 2. Use this template:
 
-```python
-# incoming_players_data_YYYY.py
-"""
-Incoming players (freshmen and transfers) for the YYYY season.
-
-Valid Date Range: August 1, YYYY-1 - July 31, YYYY
-"""
-
-RAW_INCOMING_TEXT_YYYY = """
-# Add players here
+```
 Conference Name:
 Player Name - School Name - Position (Club)
-"""
 ```
 
 3. The system will automatically use it when the date range is active
@@ -113,11 +85,9 @@ Multiple positions can be separated by `/` (e.g., `OH/RS`, `S/DS`)
 To verify which year's data is currently being used:
 
 ```bash
-python -m settings.incoming_players_data
+python -m scripts.incoming_players_data
 ```
 
-Output example:
-```
 Current date: December 01, 2025
 Using incoming players data for: 2026
 Data length: 45230 characters
@@ -178,5 +148,5 @@ No code changes are needed to switch years - it happens automatically based on t
 ## See Also
 
 - **Manual Rosters**: `MANUAL_ROSTERS_README.md` - For JavaScript-rendered sites
-- **Transfers**: `transfers_config.py` - Outgoing transfer tracking
+- **Transfers**: `transfers.json` - Outgoing transfer tracking
 - **Teams**: `teams.py` - D1 team roster and stats URLs

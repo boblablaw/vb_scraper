@@ -10,8 +10,8 @@ import requests
 # Add project root to path so we can import the settings package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from settings.teams import TEAMS
-from settings.teams_urls import get_season_year
+from scripts.teams_loader import load_teams
+from scripts.teams_urls import get_season_year
 
 
 S3_TEMPLATE = "https://s3.us-east-2.amazonaws.com/sidearm.nextgen.sites/{domain}/stats/wvball/{year}/pdf/cume.pdf"
@@ -76,7 +76,7 @@ def download_pdfs(year: int | None = None,
     print(f"Using season year: {year}")
     print(f"Saving PDFs to: {output_dir}")
 
-    for team in TEAMS:
+    for team in load_teams():
         team_name = team.get("team", "<unknown>")
         pdf_url, domain = build_pdf_url(team, year)
         if not pdf_url or not domain:
@@ -128,7 +128,7 @@ def generate_report(year: int | None = None,
 
     rows = []
 
-    for team in TEAMS:
+    for team in load_teams():
         team_name = team.get("team", "<unknown>")
         conference = team.get("conference", "")
         _pdf_url, domain = build_pdf_url(team, year)
