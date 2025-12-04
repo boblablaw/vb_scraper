@@ -3,6 +3,7 @@
 import math
 from pathlib import Path
 import re
+import json
 
 import pandas as pd
 
@@ -34,6 +35,7 @@ COACHES_CACHE_PATH = ROOT_DIR / "settings" / "coaches_cache.json"
 # Data files (adjust paths if your CSVs live elsewhere)
 TEAM_PIVOT_CSV = ROOT_DIR / "exports" / "team_pivot.csv"
 ROSTERS_STATS_CSV = ROOT_DIR / "exports" / "rosters_and_stats.csv"
+TRANSFERS_JSON = ROOT_DIR / "settings" / "transfers.json"
 
 # If a school name in this script differs from the 'team' name in the CSVs,
 # map it here so we can look it up correctly. Values are loaded from
@@ -475,6 +477,19 @@ def enrich_rosters_from_csv():
 
     df = pd.read_csv(ROSTERS_STATS_CSV)
 
+    transfers = []
+    if TRANSFERS_JSON.exists():
+        try:
+            transfers = json.load(open(TRANSFERS_JSON, "r", encoding="utf-8"))
+        except Exception:
+            transfers = []
+
+    def _norm_school(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(s).lower()).strip()
+
+    def _norm_name(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(s).lower()).strip()
+
     team_col = _get_column_case_insensitive(df, ["team"])
     if not team_col:
         print("WARNING: rosters_and_stats.csv is missing a 'team' column; "
@@ -511,6 +526,11 @@ def enrich_rosters_from_csv():
         pivot_name = TEAM_NAME_ALIASES.get(school_name, school_name)
 
         rows = df[df[team_col] == pivot_name].copy()
+        outgoing_names = {
+            _norm_name(x["name"])
+            for x in transfers
+            if _norm_school(x.get("old_team", "")) == _norm_school(pivot_name)
+        }
         players = []
         seen_names = set()
 
@@ -534,6 +554,8 @@ def enrich_rosters_from_csv():
 
                 name_str = str(name).strip()
                 name_key = name_str.lower()
+                if _norm_name(name_str) in outgoing_names:
+                    continue
                 if name_key in seen_names:
                     continue
                 seen_names.add(name_key)
@@ -707,6 +729,49 @@ def compute_vb_opportunity_score(roster, player_position: str | None):
     return round(score, 2)
 
 
+def auto_risk_watchouts(s: dict, player_position: str | None) -> str:
+    """Auto-generate a short 'Risk / Watchouts' blurb based on
+    conference, distance, travel difficulty, and vb_opp_score.
+    """
+    msgs: list[str] = []
+
+    conf = (s.get("conference") or "").strip()
+    tier = (s.get("tier") or "").strip()
+    drive = float(s.get("drive_dist_mi") or 0)
+    travel_diff = int(s.get("travel_difficulty") or 0)
+    vb_opp = float(s.get("vb_opp_score") or 2.0)
+
+    # Example heuristics – tweak as you like:
+    power_confs = {"Big 12", "ACC", "Big East", "Big Ten", "SEC", "Pac-12"}
+
+    if conf in power_confs:
+        msgs.append(
+            "Power-conference competition; playing time may depend on winning a role early."
+        )
+
+    if vb_opp <= 2.2:
+        msgs.append(
+            "Setter room may be crowded; monitor depth chart and portal additions closely."
+        )
+    elif vb_opp >= 2.9:
+        msgs.append(
+            "High current opportunity, but staff may bring in more setters quickly."
+        )
+
+    if drive > 800 or travel_diff >= 60:
+        msgs.append("Long-distance travel and separation from home are non-trivial factors.")
+
+    if tier in ("A", "A-"):
+        msgs.append("Stronger academic profile may come with higher workload and expectations.")
+
+    if not msgs:
+        msgs.append(
+            "No major structural risks flagged; focus on staff fit, culture, and major alignment."
+        )
+
+    return " ".join(msgs)
+
+
 def haversine_miles(lat1, lon1, lat2, lon2):
     """Great-circle distance between two points in miles."""
     R_km = 6371.0
@@ -804,6 +869,10 @@ def compute_travel_and_fit():
             s["geo_score"] * 0.2,
             2
         )
+
+        # Auto-fill risk/watchouts if not already provided in SCHOOLS
+        if not s.get("risk_watchouts"):
+            s["risk_watchouts"] = auto_risk_watchouts(s, getattr(PLAYER, "position", None))
     
 
 
