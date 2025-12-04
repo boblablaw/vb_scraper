@@ -65,7 +65,7 @@ def ensure_school_entry(school_name: str, schools: list[dict]):
         "city_state": "",
         "conference": "",
         "tier": "B",
-        "offense_type": "5-1",
+        "offense_type": "",
         "lat": None,
         "lon": None,
         "notes": "",

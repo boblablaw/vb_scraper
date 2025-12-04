@@ -150,7 +150,7 @@ def load_schools_data(path: Path | None = None):
                 "city_state": entry.get("city_state", ""),
                 "conference": entry.get("conference", ""),
                 "tier": entry.get("tier", ""),
-                "offense_type": entry.get("offense_type", ""),
+                "offense_type": "",  # will be filled from team_pivot CSV
                 "lat": entry.get("lat"),
                 "lon": entry.get("lon"),
                 "notes": entry.get("notes", ""),
