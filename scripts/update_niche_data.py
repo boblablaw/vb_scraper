@@ -220,12 +220,18 @@ def main():
     parser.add_argument("--teams-json", type=Path, default=TEAMS_PATH, help="Path to settings/teams.json")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between requests (seconds)")
     parser.add_argument("--verbose", action="store_true", help="Print per-team status")
+    parser.add_argument("--team", action="append", dest="teams_filter", help="Only update specific team(s); can be used multiple times")
     args = parser.parse_args()
 
     teams = json.load(open(args.teams_json, "r", encoding="utf-8"))
     updated = 0
 
-    for team in teams:
+    targets = teams
+    if args.teams_filter:
+        wanted = set(args.teams_filter)
+        targets = [t for t in teams if t.get("team") in wanted]
+
+    for team in targets:
         name = team.get("team")
         changed = update_team(team)
         if changed:
