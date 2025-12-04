@@ -225,6 +225,7 @@ def main():
 
     teams = json.load(open(args.teams_json, "r", encoding="utf-8"))
     updated = 0
+    missing: list[str] = []
 
     targets = teams
     if args.teams_filter:
