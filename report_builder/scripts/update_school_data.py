@@ -65,8 +65,6 @@ def ensure_school_entry(school_name: str, schools: list[dict]):
         "offense_type": "5-1",
         "lat": None,
         "lon": None,
-        "vb_opp_score": 2.0,
-        "geo_score": 2.0,
         "notes": "",
     }
     schools.append(entry)
