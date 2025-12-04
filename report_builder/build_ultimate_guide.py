@@ -127,8 +127,15 @@ def filter_schools_for_player(player):
     """
     if not player or not getattr(player, "schools", None):
         return
-    wanted = set(player.schools)
-    filtered = [s for s in SCHOOLS if s["name"] in wanted]
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+    wanted_norm = {_norm(x) for x in player.schools}
+    filtered = []
+    for s in SCHOOLS:
+        names_to_check = [s["name"]] + s.get("team_name_aliases", [])
+        if any(_norm(n) in wanted_norm for n in names_to_check):
+            filtered.append(s)
     if filtered:
         SCHOOLS[:] = filtered
 
