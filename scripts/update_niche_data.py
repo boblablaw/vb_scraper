@@ -189,14 +189,21 @@ def main():
     parser = argparse.ArgumentParser(description="Update teams.json with Niche data using niche_data_slug.")
     parser.add_argument("--teams-json", type=Path, default=TEAMS_PATH, help="Path to settings/teams.json")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between requests (seconds)")
+    parser.add_argument("--verbose", action="store_true", help="Print per-team status")
     args = parser.parse_args()
 
     teams = json.load(open(args.teams_json, "r", encoding="utf-8"))
     updated = 0
 
     for team in teams:
+        name = team.get("team")
         if update_team(team):
             updated += 1
+            if args.verbose:
+                print(f"[OK] {name}")
+        else:
+            if args.verbose:
+                print(f"[SKIP] {name}")
         time.sleep(args.delay)
 
     with open(args.teams_json, "w", encoding="utf-8") as f:
