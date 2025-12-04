@@ -134,7 +134,8 @@ def filter_schools_for_player(player):
     filtered = []
     for s in SCHOOLS:
         names_to_check = [s["name"]] + s.get("team_name_aliases", [])
-        if any(_norm(n) in wanted_norm for n in names_to_check):
+        norm_names = [_norm(n) for n in names_to_check]
+        if any(n in wanted_norm or any(n in w or w in n for w in wanted_norm) for n in norm_names):
             filtered.append(s)
     if filtered:
         SCHOOLS[:] = filtered
