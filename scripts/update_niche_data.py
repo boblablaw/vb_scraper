@@ -184,7 +184,7 @@ def update_team(team: dict) -> bool:
     if not html:
         html = fetch_html_playwright(url)
     if not html:
-        return False
+        return "no_html"
 
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(" ", strip=True)
@@ -234,7 +234,11 @@ def main():
     for team in targets:
         name = team.get("team")
         changed = update_team(team)
-        if changed:
+        if changed == "no_html":
+            missing.append(name)
+            if args.verbose:
+                print(f"[MISS] {name} (no HTML)")
+        elif changed:
             updated += 1
             if args.verbose:
                 print(f"[OK] {name}")
@@ -248,6 +252,10 @@ def main():
         f.write("\n")
 
     print(f"Updated Niche data for {updated} team(s).")
+    if missing:
+        print("No Niche data fetched for:")
+        for m in missing:
+            print(f"  - {m}")
 
 
 if __name__ == "__main__":
