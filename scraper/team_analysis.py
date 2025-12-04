@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
-from settings import RPI_TEAM_NAME_ALIASES
+from settings import TEAMS
 import requests
 import re
 from .utils import (
@@ -135,6 +135,34 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
                     fallback_url,
                     e,
                 )
+
+    if not players and stats_url:
+        # Fallback: synthesize roster from stats table if roster parsing failed
+        try:
+            stats_lookup = build_stats_lookup(stats_url)
+            if stats_lookup:
+                players = [
+                    {
+                        "team": team_name,
+                        "conference": team_info.get("conference", ""),
+                        "name": s.get("player", ""),
+                        "position": "",
+                        "class_raw": "",
+                        "height_raw": "",
+                    }
+                    for s in stats_lookup.values()
+                ]
+                logger.warning(
+                    "Synthesized %d players for team %s from stats due to empty roster parse.",
+                    len(players),
+                    team_name,
+                )
+        except Exception as e:
+            logger.warning(
+                "Roster parse failed and stats synthesis failed for %s: %s",
+                team_name,
+                e,
+            )
 
     if not players:
         logger.warning("No players parsed for team %s from %s", team_name, roster_url)
