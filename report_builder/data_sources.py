@@ -140,7 +140,7 @@ def load_schools_data(path: Path | None = None):
     data = _load_json(path or TEAMS_JSON_PATH) or []
     schools: list[dict] = []
     for entry in data:
-        name = entry.get("name") or entry.get("team")
+        name = entry.get("team")
         if not name:
             continue
         schools.append(
@@ -178,9 +178,7 @@ def load_niche_data(path: Path | None = None):
     data = _load_json(path or TEAMS_JSON_PATH) or []
     niche: dict[str, dict] = {}
     for entry in data:
-        name = entry.get("name") or entry.get("team")
-        if not name:
-            continue
-        if entry.get("niche"):
+        name = entry.get("team")
+        if name and entry.get("niche"):
             niche[name] = entry["niche"]
     return niche

@@ -24,7 +24,7 @@ def _build_alias_map() -> Dict[str, str]:
     """
     aliases: Dict[str, str] = {}
     for t in TEAMS:
-        name = t.get("team") or t.get("name")
+        name = t.get("team")
         if not name:
             continue
         for alias in t.get("team_name_aliases", []) or []:

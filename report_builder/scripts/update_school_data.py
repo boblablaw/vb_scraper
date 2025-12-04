@@ -131,7 +131,7 @@ def main():
         raise FileNotFoundError(f"teams.json not found at {args.teams_json}")
 
     teams_data = load_json(args.teams_json, default=[])
-    teams = sorted({t.get("name") or t.get("team") or t for t in teams_data if t})
+    teams = sorted({t.get("team") or t for t in teams_data if t})
 
     schools = load_json(args.schools_json, default=[])
     niche = load_json(args.niche_json, default={})

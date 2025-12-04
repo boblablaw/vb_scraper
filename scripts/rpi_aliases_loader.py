@@ -16,7 +16,9 @@ def load_rpi_aliases(path: Path | str | None = None):
         teams = json.load(f)
     aliases: dict[str, str] = {}
     for t in teams:
-        name = t.get("team") or t.get("name")
+        name = t.get("team")
+        if not name:
+            continue
         for alias in t.get("team_name_aliases", []) or []:
             if alias != name:
                 aliases[name] = alias
