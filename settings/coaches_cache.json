@@ -771,20 +771,20 @@
     "Loyola University Chicago": {
       "coaches": [
         {
-          "name": "Head Coach",
-          "title": "Amanda Berkley",
+          "name": "Amanda Berkley",
+          "title": "Head Coach",
           "email": "aberkley@luc.edu",
           "phone": "773-508-8749"
         },
         {
-          "name": "Associate Head Coach",
-          "title": "Morgan Salow",
+          "name": "Morgan Salow",
+          "title": "Associate Head Coach",
           "email": "msalow@luc.edu",
           "phone": "773-508-2995"
         },
         {
-          "name": "Assistant Coach",
-          "title": "Sydney Cheatham-Carlone",
+          "name": "Sydney Cheatham-Carlone",
+          "title": "Assistant Coach",
           "email": "scarlone@luc.edu",
           "phone": ""
         }
@@ -1878,12 +1878,6 @@
           "phone": ""
         },
         {
-          "name": "@CJohnsonLynch",
-          "title": "Christy Johnson-Lynch Head Coach",
-          "email": "christyj@iastate.edu",
-          "phone": ""
-        },
-        {
           "name": "Ciara Jones",
           "title": "Assistant Coach/Recruiting Coordinator",
           "email": "ciaraj@iastate.edu",
@@ -1964,13 +1958,13 @@
         {
           "name": "Steve Astor",
           "title": "Associate Head Coach",
-          "email": "",
+          "email": "sastor@kstatesports.com ",
           "phone": ""
         },
         {
           "name": "Kelly O'Connor",
           "title": "Assistant Coach",
-          "email": "",
+          "email": "koconnor@kstatesports.com",
           "phone": ""
         },
         {

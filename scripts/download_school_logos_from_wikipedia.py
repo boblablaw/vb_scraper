@@ -24,8 +24,10 @@ import time
 import sys
 import argparse
 import html
+import base64
 from pathlib import Path
 from io import StringIO
+from urllib.parse import urlsplit, parse_qs, unquote
 import requests
 import pandas as pd
 
@@ -45,6 +47,10 @@ LOGO_DIR = "logos"
 os.makedirs(LOGO_DIR, exist_ok=True)
 MISSING_LOGOS_PATH = os.path.join(LOGO_DIR, "missing_school_logos.txt")
 TEAM_URLS = {normalize_school_key(t["team"]): t.get("url") for t in TEAMS}
+TEAM_LOGO_OVERRIDES = {
+    # Auburn inline SVG header logo (provided sample)
+    normalize_school_key("Auburn University"): "data:image/svg+xml,%3c?xml%20version='1.0'%20encoding='UTF-8'%20standalone='no'?%3e%3csvg%20xmlns:dc='http://purl.org/dc/elements/1.1/'%20xmlns:cc='http://creativecommons.org/ns%23'%20xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns%23'%20xmlns:svg='http://www.w3.org/2000/svg'%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20641%20564.98669'%20height='564.98669'%20width='641'%20xml:space='preserve'%20id='svg2'%20version='1.1'%3e%3cmetadata%20id='metadata8'%3e%3crdf:RDF%3e%3ccc:Work%20rdf:about=''%3e%3cdc:format%3eimage/svg+xml%3c/dc:format%3e%3cdc:type%20rdf:resource='http://purl.org/dc/dcmitype/StillImage'%20/%3e%3c/cc:Work%3e%3c/rdf:RDF%3e%3c/metadata%3e%3cdefs%20id='defs6'%20/%3e%3cg%20transform='matrix(1.3333333,0,0,-1.3333333,0,564.98667)'%20id='g10'%3e%3cg%20transform='scale(0.1)'%20id='g12'%3e%3cpath%20id='path14'%20style='fill:%23f1511b;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='m%203659.99,2999.61%20v%20-209.75%20l%20-104.39,209.75%20h%20104.39%20m%20-2504.39,0%20H%201260%20l%20-104.4,-209.75%20v%20209.75%20M%202403.75,765.422%20c%20-618.49,0%20-820.64,85.719%20-1038.7,206.867%20-18.18,10.102%20-34.33,20.191%20-49.54,30.261%20h%20647.29%20v%20680.32%20H%201569%20l%20174.72,310.61%20h%201368.04%20l%20177.07,-319.74%20h%20-442.68%20v%20-671.19%20h%20645.83%20C%203476.75,992.48%203460.6,982.391%203442.41,972.289%203224.37,851.141%203022.23,765.422%202403.75,765.422%20m%2021.88,2437.668%20295.77,-520.24%20h%20-595.83%20z%20m%202381.86,-203.13%20v%20680.28%20H%203318.13%20v%20-286%20l%20-475.37,843.12%20H%201966.17%20L%201489.36,3391.7%20v%20288.54%20H%200%20v%20-680.28%20h%20300%20c%200,0%20-0.211,-830.21%20-0.496,-1326.22%20H%2014.3516%20V%201002.55%20H%20313.242%20C%20342.711,816.082%20426.352,613.191%20655.16,444.609%201017.33,177.738%201453.3,0%202403.75,0%20c%20950.44,0.0117188%201386.41,177.738%201748.58,444.609%20191.4,141%20279.76,370.411%20320.62,557.941%20h%20321.62%20v%20671.19%20h%20-286.64%20v%201326.22%20h%20299.56'%20/%3e%3cpath%20id='path16'%20style='fill:%230c2950;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='M%203508.27,853.781%20C%203262.82,717.398%203031.02,629.809%202403.75,629.809%20c%20-627.28,0%20-859.08,87.589%20-1104.53,223.972%20-85.31,47.367%20-144.91,97%20-186.97,148.769%20H%20451.078%20C%20479.703,848.16%20553.043,688.25%20735.582,553.75%201081.03,299.238%201485.58,135.609%202403.75,135.609%20c%20918.16,0%201322.71,163.629%201668.14,418.141%20182.54,134.5%20255.9,294.41%20284.52,448.8%20H%203695.24%20C%203653.18,950.781%203593.57,901.148%203508.27,853.781'%20/%3e%3cpath%20id='path18'%20style='fill:%230c2950;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='m%203790.1,3153.73%20c%200,-60.62%200,-305%200,-596.54%20l%20498.1,-883.45%20h%2083.68%20c%200,513.27%200,1461.81%200,1461.81%20h%20300%20v%20409.08%20H%203453.74%20v%20-390.9%20h%20336.36'%20/%3e%3cpath%20id='path20'%20style='fill:%230c2950;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='m%201017.4,2554.65%20c%200,292.67%200,538.28%200,599.08%20h%20336.36%20v%20390.9%20H%20135.602%20v%20-409.08%20h%20300%20c%200,0%200,-948.54%200,-1461.81%20h%2085.14%20l%20496.658,880.91'%20/%3e%3cpath%20id='path22'%20style='fill:%230c2950;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='m%201890.84,2547.25%20h%201063.63%20l%20-527.99,928.71%20-535.64,-928.71%20m%20872.7,1554.51%201445.45,-2563.6%20h%20449.99%20v%20-400%20H%202981.74%20v%20400%20h%20537.19%20l%20-327.25,590.92%20H%201664.43%20L%201337.16,1547.24%20H%201827.2%20V%201138.16%20H%20149.973%20v%20400%20h%20449.968%20l%201445.449,2563.6%20h%20718.15'%20/%3e%3cpath%20id='path24'%20style='fill:%230c2950;fill-opacity:1;fill-rule:nonzero;stroke:none'%20d='m%204483.28,525.449%20v%2041.461%20h%2027.54%20c%2014.08,0%2029.08,-3.109%2029.08,-19.66%200,-20.57%20-15.3,-21.801%20-32.43,-21.801%20h%20-24.19%20m%200,-17.14%20h%2023.25%20l%2035.21,-57.649%20h%2022.63%20l%20-37.95,58.59%20c%2019.6,2.43%2034.6,12.828%2034.6,36.77%200,26.39%20-15.61,38%20-47.14,38%20h%20-50.84%20V%20450.66%20h%2020.24%20z%20m%2024.48,-106.368%20c%2063.02,0%20116.61,48.719%20116.61,115.571%200,66.508%20-53.59,115.136%20-116.61,115.136%20-63.8,0%20-117.69,-48.628%20-117.69,-115.136%200,-66.852%2053.89,-115.571%20117.69,-115.571%20z%20m%20-94.57,115.571%20c%200,54.898%2041.54,95.976%2094.57,95.976%2052.32,0%2093.48,-41.078%2093.48,-95.976%200,-55.543%20-41.16,-96.442%20-93.48,-96.442%20-53.03,0%20-94.57,40.899%20-94.57,96.442'%20/%3e%3c/g%3e%3c/g%3e%3c/svg%3e",
+}
 
 REQUEST_DELAY = 0.4  # seconds between Commons API calls
 DEFAULT_HEADERS = {
@@ -206,9 +212,31 @@ def download_logo(team_name: str, url: str) -> str:
     Returns the local file path (or "" on failure).
     """
     url = clean_image_url(url)
-    ext = os.path.splitext(url)[1]
-    if not ext:
-        ext = ".png"
+    # Handle data URLs (e.g., inline SVG) directly without HTTP fetch.
+    if url.startswith("data:"):
+        mime = url.split(";", 1)[0].split(":")[1] if ";" in url else url.split(":", 1)[1]
+        ext = ".svg" if "svg" in mime else ".png"
+        payload = url.split(",", 1)[1] if "," in url else ""
+        try:
+            if ";base64" in url:
+                content = base64.b64decode(payload)
+            else:
+                content = unquote(payload).encode("utf-8")
+        except Exception as e:
+            print(f"  ERROR decoding data URL for {team_name}: {e}")
+            return ""
+
+        filename = slugify(team_name) + ext
+        filepath = os.path.join(LOGO_DIR, filename)
+        try:
+            with open(filepath, "wb") as f:
+                f.write(content)
+            return filepath
+        except Exception as e:
+            print(f"  ERROR writing data URL logo for {team_name}: {e}")
+            return ""
+
+    ext = guess_extension(url)
 
     filename = slugify(team_name) + ext
     filepath = os.path.join(LOGO_DIR, filename)
@@ -279,24 +307,20 @@ def extract_header_logo(html: str) -> str:
     """
     class_patterns = [
         "main-header__logo-image",  # Cleveland State
+        "main-header__logo-scroll", # Abilene Christian variant
         "main-logo",                # Bryant
         "main-logo-1",              # Campbell variant
         "primary",                  # Belmont Sidearm header mark
+        "header__logo-image",       # Auburn variant
     ]
     for cls in class_patterns:
         img_match = re.search(fr'<img[^>]+class="[^">]*{re.escape(cls)}[^">]*"[^>]*>', html, re.IGNORECASE)
         if not img_match:
             continue
         tag = img_match.group(0)
-        # Prefer src, then data-src, then first entry in srcset
-        for attr in ("src", "data-src"):
-            m = re.search(fr'{attr}=["\']([^"\']+)["\']', tag, re.IGNORECASE)
-            if m:
-                return m.group(1).strip()
-        m = re.search(r'srcset=["\']([^"\']+)["\']', tag, re.IGNORECASE)
-        if m:
-            first = m.group(1).split(",")[0].strip().split()[0]
-            return first
+        url = select_best_img_url(tag)
+        if url:
+            return url
     # Belmont: logo wrapped in a div.main_header__logo with img.primary
     container = re.search(r'<div[^>]+class="[^">]*main_header__logo[^">]*"[^>]*>(.*?)</div>', html, re.IGNORECASE | re.DOTALL)
     if container:
@@ -304,31 +328,114 @@ def extract_header_logo(html: str) -> str:
         img_match = re.search(r'<img[^>]+class="[^">]*primary[^">]*"[^>]*>', inner, re.IGNORECASE)
         if img_match:
             tag = img_match.group(0)
-            for attr in ("src", "data-src"):
-                m = re.search(fr'{attr}=["\']([^"\']+)["\']', tag, re.IGNORECASE)
-                if m:
-                    return m.group(1).strip()
-            m = re.search(r'srcset=["\']([^"\']+)["\']', tag, re.IGNORECASE)
-            if m:
-                first = m.group(1).split(",")[0].strip().split()[0]
-                return first
+            url = select_best_img_url(tag)
+            if url:
+                return url
     return ""
 
 
 def clean_image_url(url: str) -> str:
-    """Decode HTML entities and strip whitespace; also normalize // to https://."""
+    """Decode HTML entities, unwrap Sidearm convert URLs, and normalize protocol-relative URLs."""
     if not url:
         return ""
     url = html.unescape(url).strip()
+    # Strip common CSS wrappers like url(...) and trailing ); or quotes
+    if url.startswith("url(") and url.endswith(")"):
+        url = url[4:-1].strip(" '\"")
+    url = url.strip(" '\"")
+    if url.endswith(");"):
+        url = url[:-2]
+        url = url.strip(" '\"")
+    parts = urlsplit(url)
+    # Unwrap Sidearm image proxy links to get the original asset (often SVG/PNG)
+    if "images.sidearmdev.com" in parts.netloc and parts.path.startswith("/convert"):
+        qs = parse_qs(parts.query)
+        inner = qs.get("url", [])
+        if inner:
+            url = unquote(inner[0])
+            parts = urlsplit(url)
     if url.startswith("//"):
         url = "https:" + url
     return url
+
+
+def select_best_img_url(tag: str) -> str:
+    """
+    From an <img> tag string, collect possible URLs (src, data-src, srcset) and
+    prefer SVGs if present, otherwise return the first found.
+    """
+    candidates: list[str] = []
+    for attr in ("src", "data-src"):
+        m = re.search(fr'{attr}=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+        if m:
+            candidates.append(m.group(1).strip())
+    for attr in ("srcset", "data-srcset"):
+        m = re.search(fr'{attr}=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+        if m:
+            entries = [e.strip().split()[0] for e in m.group(1).split(",") if e.strip()]
+            candidates.extend(entries)
+
+    if not candidates:
+        return ""
+
+    for c in candidates:
+        if ".svg" in c.lower():
+            return c
+    return candidates[0]
+
+
+def find_svg_logo(html: str) -> str:
+    """
+    Scan the page for any SVG URLs containing 'logo' or 'nav_logo'.
+    Useful when the logo is not referenced via predictable classes.
+    """
+    matches = re.findall(r'https?://[^\s"\\\']+\.svg[^\s"\\\']*', html, re.IGNORECASE)
+    preferred = [m for m in matches if "logo" in m.lower()]
+    if preferred:
+        return preferred[0]
+    return matches[0] if matches else ""
+
+
+def guess_extension(url: str) -> str:
+    """
+    Choose a sensible file extension from URL path or query parameters.
+    Handles Sidearm-style ?type=jpeg and strips query fragments from the ext.
+    """
+    if url.startswith("data:"):
+        if "svg" in url[:50]:
+            return ".svg"
+        if "jpeg" in url[:50]:
+            return ".jpeg"
+        if "jpg" in url[:50]:
+            return ".jpg"
+        return ".png"
+    if not url:
+        return ".png"
+    parts = urlsplit(url)
+    ext = os.path.splitext(parts.path)[1]
+    if ext and "&" in ext:
+        ext = ext.split("&", 1)[0]
+    if not ext:
+        qs = parse_qs(parts.query)
+        type_vals = qs.get("type", [])
+        if any(v.lower().endswith("jpeg") or v.lower() == "jpeg" for v in type_vals):
+            ext = ".jpeg"
+        elif any("jpg" in v.lower() for v in type_vals):
+            ext = ".jpg"
+    if not ext:
+        ext = ".png"
+    return ext
 
 
 def fetch_team_site_logo_url(team_name: str) -> str:
     """
     Fallback: fetch roster page and grab og:image/twitter:image as a logo candidate.
     """
+    # Manual override for specific teams
+    override = TEAM_LOGO_OVERRIDES.get(normalize_school_key(team_name))
+    if override:
+        return override
+
     roster_url = lookup_team_roster_url(team_name)
     if not roster_url:
         print("  No roster URL mapping found for this team; skipping team-site fallback.")
@@ -342,13 +449,20 @@ def fetch_team_site_logo_url(team_name: str) -> str:
         return ""
 
     html = resp.text
-    # Try meta tags first, then header logo pattern.
+    # Try meta tags first
     logo_url = clean_image_url(extract_og_image(html))
-    # Some Sidearm sites expose an image-proxy convert URL that may 400; prefer direct header logo if present.
-    if (not logo_url) or ("sidearmdev.com/convert" in logo_url):
-        header_logo = clean_image_url(extract_header_logo(html))
-        if header_logo:
-            logo_url = header_logo
+
+    # Prefer direct header logo (often SVG) over proxied convert URLs or missing og:image
+    header_logo = clean_image_url(extract_header_logo(html))
+    if header_logo and (not logo_url or not logo_url.lower().endswith(".svg")):
+        logo_url = header_logo
+
+    # As a last resort, scan for any SVG with "logo" in the URL
+    if (not logo_url) or not logo_url.lower().endswith(".svg"):
+        svg_logo = clean_image_url(find_svg_logo(html))
+        if svg_logo:
+            logo_url = svg_logo
+
     if not logo_url:
         print("  No og:image/twitter:image or header logo found on roster page.")
         return ""
@@ -359,8 +473,8 @@ def fetch_team_site_logo_url(team_name: str) -> str:
 # ---------------- MAIN ----------------
 
 def main(selected_teams: list[str] | None = None):
-    # Step 1: get all D1 volleyball schools from Wikipedia
-    schools = get_d1_volleyball_schools()
+    # Use configured team list instead of scraping Wikipedia so we skip Commons entirely.
+    schools = sorted({t["team"] for t in TEAMS})
     if selected_teams:
         wanted = {normalize_school_key(t) for t in selected_teams}
         schools = [s for s in schools if normalize_school_key(s) in wanted]
@@ -391,33 +505,21 @@ def main(selected_teams: list[str] | None = None):
         if bad_marker_present:
             print("  ⚠️  Found *_BAD marker; will attempt fallback download.")
 
-        # First attempt: direct "<school> logo"
-        search_query = f'"{school}" logo'
-        best = search_commons_for_logo(search_query)
-        source = "direct"
+        # Directly fetch team-site logo (no Wikipedia/Commons lookup).
+        best = None
+        source = "team_site"
 
-        # Second attempt: nickname-based query
-        if not best:
-            nick_query = nickname_query_for_team(school)
-            if nick_query:
-                print(f"  No direct hit; trying nickname query: {nick_query}")
-                best = search_commons_for_logo(nick_query)
-                source = "nickname"
-
-        # Fallback to team site if Commons failed or a BAD marker was placed.
-        if bad_marker_present or not best:
-            fallback_url = fetch_team_site_logo_url(school)
-            if fallback_url:
-                best = {
-                    "title": "Team site og:image",
-                    "url": fallback_url,
-                    "mime": "",
-                    "score": 0
-                }
-                source = "team_site"
-                print("  ✔ Found fallback logo from team site.")
-            elif bad_marker_present:
-                print("  Team-site fallback failed despite BAD marker; will use Commons result if available.")
+        fallback_url = fetch_team_site_logo_url(school)
+        if fallback_url:
+            best = {
+                "title": "Team site logo",
+                "url": fallback_url,
+                "mime": "",
+                "score": 0
+            }
+            print("  ✔ Found logo from team site.")
+        else:
+            print("  ❌ No logo found on team site.")
 
         # Record result
         if not best:
