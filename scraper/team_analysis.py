@@ -141,12 +141,14 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
         return []
 
     blocklist = {
-        "university of texas": {"torrey stafford"},
-        "coppin state university": {"takenya stafford"},
         "temple university": {"lainey team impact"},
-        "georgia institute of technology": {"luanna emiliano", "bruno dewes", "leo weng"},
+        "temple university": {"team impact lainey"},
+        # Use canonical_name(token-sorted) values for matching
+        "georgia institute of technology": {"emiliano luanna", "bruno dewes", "leo weng"},
         "university of california, davis": {"maren b."},
+        "university of california, davis": {"b. maren"},
         "western kentucky university": {"harlie bryant"},
+        "western kentucky university": {"bryant harlie"},
     }
     team_key = team_name.lower().strip()
     if team_key in blocklist:

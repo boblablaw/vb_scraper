@@ -28,7 +28,7 @@ ROOT_DIR = BASE_DIR.parent  # repo root
 LOGOS_DIR = ROOT_DIR / "report_builder" / "logos"
 PNG_DIR = LOGOS_DIR
 US_MAP_IMAGE = ROOT_DIR / "report_builder" / "assets" / "us_map_blank.png"
-OUTPUT_PDF = ROOT_DIR / "report_builder" / "exports" / "Ultimate_School_Guide_FULL_LOCAL.pdf"
+OUTPUT_PDF = ROOT_DIR / "report_builder" / "exports" / "Ultimate_School_Guide.pdf"
 COACHES_CACHE_PATH = ROOT_DIR / "settings" / "coaches_cache.json"
 
 # Data files (adjust paths if your CSVs live elsewhere)
@@ -89,36 +89,26 @@ US_MAX_LON = -65.0
 
 SCHOOLS = load_schools_data()
 
+# Seed defaults for logo map, politics, airport info, and aliases from teams.json
+LOGO_MAP = {s["name"]: s.get("logo_map_name") for s in SCHOOLS if s.get("logo_map_name")}
+POLITICS_LABEL_OVERRIDES = {s["name"]: s.get("political_label") for s in SCHOOLS if s.get("political_label")}
+AIRPORT_INFO = {
+    s["name"]: {
+        "airport_name": s.get("airport_name", ""),
+        "airport_code": s.get("airport_code", ""),
+        "airport_drive_time": s.get("airport_drive_time", ""),
+        "notes_from_indy": s.get("airport_notes", ""),
+    }
+    for s in SCHOOLS
+    if s.get("airport_name") or s.get("airport_code")
+}
+TEAM_NAME_ALIASES = {s["name"]: s.get("team_name_aliases", [s["name"]])[0] for s in SCHOOLS}
+RISK_WATCHOUTS = {s["name"]: s.get("risk_watchouts") for s in SCHOOLS if s.get("risk_watchouts")}
+
 
 # -------------------------------------------------------------------
 # LOGOS + NICHE-STYLE DATA
 # -------------------------------------------------------------------
-
-LOGO_MAP = {
-    "Iowa State University": "Iowa_State_University.png",
-    "Kansas State University": "Kansas State University.png",
-    "University of Utah": "University_of_Utah.png",
-    "Florida State University": "Florida_State_University.png",
-    "Drake University": "Drake_University.png",
-    "Florida Gulf Coast University": "Florida_Gulf_Coast_University.png",
-    "University of Connecticut (UConn)": "University_Of_Connecticut.png",
-    "Boise State University": "Boise_State_University_NEW.png",
-    "Morehead State University": "Morehead_state_University_NEW.png",
-    "University of Toledo": "Toledo_Rockets_logo.png",
-    "University of Northern Colorado": "university_of_northern_colorado.png",
-    "University of South Alabama": "University_of_South_Alabama.png",
-    "University of Illinois Chicago (UIC)": "University_of_Illinois_Chicago_UIC_.png",
-    "Loyola University Chicago": "Loyola_Ramblers_logo.png",
-    "North Carolina State University (NC State)": "North_Carolina_State_University.png",
-    "University of North Carolina at Charlotte (Charlotte)": "University_of_North_Carolina_at_Charlotte.png",
-    "Virginia Commonwealth University (VCU)": "Virginia_Commonwealth_University.png",
-    "Georgia Southern University": "Georgia_Southern_University.png",
-    "Northern Arizona University (NAU)": "Northern_Arizona_University.png",
-    "Georgia State University": "Georgia_State_University.png",
-    "University of Denver": "University_of_Denver.png",
-    "Valparaiso University": "Valparaiso_University.png",
-    "University of Maryland, Baltimore County (UMBC)": "University_of_Maryland_Baltimore_County.png",
-}
 
 NICHE_DATA = load_niche_data()
 
@@ -636,6 +626,62 @@ def _exp_weight(cls: str) -> float:
     return 0.5
 
 
+def _parse_minutes(text: str) -> float:
+    """
+    Parse a minutes string like '15 minutes', '15-20 min', or '15–20' into a single numeric value.
+    Falls back to 0 if nothing is parseable.
+    """
+    if not text:
+        return 0.0
+    clean = text.replace("–", "-")
+    nums = re.findall(r"\d+(?:[.,]\d+)?", clean)
+    if not nums:
+        return 0.0
+    vals = [float(n.replace(",", ".")) for n in nums]
+    if "-" in clean and len(vals) >= 2:
+        return sum(vals[:2]) / 2.0  # average of the range
+    return vals[0]
+
+
+def _airport_codes(info: dict) -> set[str]:
+    """
+    Extract IATA-like codes from the airport_code field (handles 'ATL', 'ORD / MDW', etc.).
+    """
+    codes = set()
+    text = info.get("airport_code", "") or ""
+    for code in re.findall(r"[A-Z]{3}", text.upper()):
+        codes.add(code)
+    return codes
+
+
+def _position_keys(text: str) -> set[str]:
+    """
+    Normalize a position string into canonical keys so that abbreviations
+    (e.g., 'S') match full names (e.g., 'Setter').
+    """
+    canon_map = {
+        "s": {"s", "set", "setter"},
+        "pin": {"oh", "rs", "opp", "opposite", "outside", "pin"},
+        "mb": {"mb", "mh", "middle"},
+        "def": {"ds", "l", "lib", "libero", "def"},
+    }
+
+    tokens = {tok for tok in re.split(r"[^a-zA-Z]+", (text or "").lower()) if tok}
+    keys: set[str] = set()
+
+    for tok in tokens:
+        matched = False
+        for canon, variants in canon_map.items():
+            if tok in variants:
+                keys.add(canon)
+                matched = True
+                break
+        if not matched:
+            keys.add(tok)
+
+    return keys
+
+
 def compute_vb_opportunity_score(roster, player_position: str | None):
     """
     Heuristic: fewer experienced players at the same position => higher opportunity.
@@ -644,7 +690,15 @@ def compute_vb_opportunity_score(roster, player_position: str | None):
     if not player_position:
         return 2.0  # neutral if we don't know the position
 
-    same_pos = [p for p in roster if player_position.lower() in (p.get("position") or "").lower()]
+    player_keys = _position_keys(player_position)
+    if not player_keys:
+        return 2.0
+
+    same_pos = []
+    for p in roster:
+        if player_keys & _position_keys(p.get("position", "")):
+            same_pos.append(p)
+
     if not same_pos:
         return 3.0
 
@@ -694,8 +748,36 @@ def compute_travel_and_fit():
         s["drive_time_hr"] = round(s["drive_dist_mi"] / 60.0, 1)  # assume 60 mph avg
         s["flight_time_hr"] = round(s["flight_dist_mi"] / 450.0, 2)  # assume 450 mph avg jet
 
-        # Travel difficulty: normalize ~ distance + some fudge
-        base = s["drive_dist_mi"] / 10.0 + s["flight_dist_mi"] / 20.0
+        # Travel difficulty: branch by likely mode (short drives vs flights)
+        DRIVE_ONLY_THRESHOLD = 350  # miles; below this we assume you'd just drive
+        info = AIRPORT_INFO.get(s["name"], {})
+        notes = (info.get("notes_from_indy") or "").lower()
+        has_direct = bool(re.search(r"\bnon[- ]?stop\b|\bdirect\b", notes))
+        has_multi_stop = bool(re.search(r"\b2[- ]?stop|\btwo[- ]?stop|\bmulti[- ]?stop", notes))
+
+        drive_minutes_airport = _parse_minutes(info.get("airport_drive_time", ""))
+        congestion_codes = {"ATL", "ORD", "LAX", "JFK", "EWR", "DFW", "DEN", "SFO", "CLT", "IAH", "PHX", "BOS", "LGA"}
+        codes_here = _airport_codes(info)
+        congestion_penalty = 8 if codes_here & congestion_codes else 0
+
+        if s["drive_dist_mi"] <= DRIVE_ONLY_THRESHOLD:
+            # Driving scenario: lighter base, no airport overhead
+            base = s["drive_dist_mi"] / 18.0  # scale so nearby trips stay low, longer drives rise meaningfully
+            base += 6  # small fatigue/parking penalty
+        else:
+            # Flying scenario: add airport overhead, distance, and congestion
+            base = s["flight_dist_mi"] / 18.0
+            base += drive_minutes_airport / 3.0  # first/last mile to campus
+            base += 20  # airport process (arrive early, parking, baggage/rental)
+            if has_direct:
+                base -= 10
+            elif has_multi_stop:
+                base += 10
+            base += congestion_penalty
+            # Long-haul bump
+            if s["flight_dist_mi"] > 1600:
+                base += 5
+
         s["travel_difficulty"] = int(min(100, max(10, base)))
 
         # Geo score (higher is better proximity) derived from drive distance

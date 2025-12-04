@@ -6,13 +6,13 @@ try:
 except ImportError:  # pragma: no cover
     yaml = None
 from pathlib import Path
+import re
 from typing import Any, Dict
 from .models import PlayerSettings
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "guide.yml"
 DEFAULTS_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "guide.defaults.yml"
-SCHOOLS_JSON_PATH = Path(__file__).resolve().parent / "config" / "schools.json"
-NICHE_JSON_PATH = Path(__file__).resolve().parent / "config" / "niche_data.json"
+TEAMS_JSON_PATH = Path(__file__).resolve().parents[1] / "settings" / "teams.json"
 
 
 def load_yaml_config(path: Path | None = None) -> Dict[str, Any]:
@@ -68,6 +68,7 @@ def apply_data_overrides(module, cfg: Dict[str, Any]):
     merge_overrides(module.COACH_OVERRIDES, cfg.get("coach_overrides", {}))
     merge_overrides(module.AIRPORT_INFO, cfg.get("airport_info", {}))
     merge_overrides(module.RISK_WATCHOUTS, cfg.get("risk_watchouts", {}))
+    merge_overrides(module.LOGO_MAP, cfg.get("logo_map", {}))
 
 
 def load_and_apply_config(module, path: Path | None = None):
@@ -121,11 +122,65 @@ def _load_json(path: Path) -> Any:
         return json.load(f)
 
 
+def _slugify(name: str) -> str:
+    name = name.lower()
+    name = name.replace("&", " and ")
+    name = re.sub(r"[^a-z0-9\\s-]", " ", name)
+    name = re.sub(r"\\s+", "-", name)
+    name = re.sub(r"-+", "-", name)
+    return name.strip("-")
+
+
 def load_schools_data(path: Path | None = None):
-    data = _load_json(path or SCHOOLS_JSON_PATH)
-    return data or []
+    """
+    Load school metadata from the consolidated settings/teams.json.
+    Backwards compatible with prior schools.json shape by projecting
+    the needed fields.
+    """
+    data = _load_json(path or TEAMS_JSON_PATH) or []
+    schools: list[dict] = []
+    for entry in data:
+        name = entry.get("name") or entry.get("team")
+        if not name:
+            continue
+        schools.append(
+            {
+                "name": name,
+                "short": entry.get("short_name") or entry.get("short") or name,
+                "city_state": entry.get("city_state", ""),
+                "conference": entry.get("conference", ""),
+                "tier": entry.get("tier", ""),
+                "offense_type": entry.get("offense_type", ""),
+                "lat": entry.get("lat"),
+                "lon": entry.get("lon"),
+                "notes": entry.get("notes", ""),
+                "map_x": entry.get("map_x"),
+                "map_y": entry.get("map_y"),
+                "airport_name": entry.get("airport_name", ""),
+                "airport_code": entry.get("airport_code", ""),
+                "airport_drive_time": entry.get("airport_drive_time", ""),
+                "airport_notes": entry.get("airport_notes", ""),
+                "political_label": entry.get("political_label", ""),
+                "logo_map_name": entry.get("logo_map_name", ""),
+                "team_name_aliases": entry.get("team_name_aliases", []),
+                "niche_data_slug": entry.get("niche_data_slug") or _slugify(name),
+                "niche": entry.get("niche", {}),
+                "risk_watchouts": entry.get("risk_watchouts", ""),
+            }
+        )
+    return schools
 
 
 def load_niche_data(path: Path | None = None):
-    data = _load_json(path or NICHE_JSON_PATH)
-    return data or {}
+    """
+    Niche data now lives inside teams.json under each team's 'niche' field.
+    """
+    data = _load_json(path or TEAMS_JSON_PATH) or []
+    niche: dict[str, dict] = {}
+    for entry in data:
+        name = entry.get("name") or entry.get("team")
+        if not name:
+            continue
+        if entry.get("niche"):
+            niche[name] = entry["niche"]
+    return niche

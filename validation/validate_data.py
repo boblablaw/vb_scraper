@@ -345,6 +345,9 @@ class DataValidator:
             # Check for coach/staff keywords in name or position
             for keyword in NON_PLAYER_KEYWORDS:
                 if keyword in name or keyword in pos_raw or keyword in class_raw:
+                    # Avoid false positives on surnames like "Stafford"
+                    if keyword == 'staff' and re.search(r'\bstafford\b', name):
+                        continue
                     suspected_non_players.append({
                         'team': row['Team'],
                         'name': row['Name'],

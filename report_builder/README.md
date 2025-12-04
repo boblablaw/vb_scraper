@@ -22,7 +22,7 @@ Generate a personalized “Ultimate School Guide” PDF for a volleyball player.
   - `exports/rosters_and_stats.csv`
   - `settings/coaches_cache.json`
 - Assets:
-  - Logos: `report_builder/logos/` (PNG files named per `LOGO_MAP` in `build_ultimate_guide.py`)
+- Logos: `report_builder/logos/` (PNG files named per `logo_map` in `report_builder/config/guide.defaults.yml`)
   - Map: `report_builder/assets/us_map_blank.png`
 
 ## Quick start

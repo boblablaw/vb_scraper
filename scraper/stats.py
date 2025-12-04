@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
+import re
 
 import pandas as pd
 import requests
@@ -62,6 +63,78 @@ def pick_sidearm_offense_defense_tables(
     return offense_df, defense_df
 
 
+def fetch_wmt_stats_api(team_id: str) -> pd.DataFrame | None:
+    """
+    Fetch player stats from the public WMT API for a given team_id.
+    Maps fields to the standard short-hand stat headers used elsewhere.
+    """
+    api_url = f"https://api.wmt.games/api/statistics/teams/{team_id}/players?per_page=150"
+    try:
+        logger.info("Fetching WMT API stats: %s", api_url)
+        resp = requests.get(api_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        resp.raise_for_status()
+        payload = resp.json()
+        data = payload if isinstance(payload, list) else payload.get("data", [])
+        if not data:
+            logger.warning("WMT API returned no player data for team_id=%s", team_id)
+            return None
+
+        rows: List[Dict[str, Any]] = []
+        for p in data:
+            stats = ((p.get("statistic") or {}).get("data") or {}).get("season", {})
+            if isinstance(stats, list):
+                stats = stats[0] if stats else {}
+            cols = stats.get("columns") if isinstance(stats, dict) else []
+            if not cols:
+                continue
+            stat = cols[0].get("statistic", {})
+
+            sets_played = stat.get("sSets")
+            points = stat.get("sPoints")
+            digs = stat.get("sDigs")
+            attempts = stat.get("sReturnAttempts")
+            rec_errors = stat.get("sReturnErrors")
+
+            row = {
+                "Player": f"{p.get('first_name','').strip()} {p.get('last_name','').strip()}".strip(),
+                "MS": "",  # matches_started not provided
+                "MP": stat.get("sIndMatchesPlayed", ""),
+                "SP": sets_played if sets_played is not None else "",
+                "PTS": points if points is not None else "",
+                "PTS/S": round(points / sets_played, 2) if points not in (None, "") and sets_played not in (None, 0, "") else "",
+                "K": stat.get("sKills", ""),
+                "K/S": stat.get("sKillsPerGame", ""),
+                "AE": stat.get("sErrors", ""),
+                "TA": stat.get("sTotalAttacks", ""),
+                "HIT%": stat.get("sAttackPCT", ""),
+                "A": stat.get("sAssists", ""),
+                "A/S": stat.get("sAssistsPerGame", ""),
+                "SA": stat.get("sAces", ""),
+                "SA/S": stat.get("sAcesPerGame", ""),
+                "SE": stat.get("sServiceErrors", ""),
+                "D": digs if digs is not None else "",
+                "D/S": stat.get("sDigsPerGame", ""),
+                "RE": rec_errors if rec_errors is not None else "",
+                "TRE": attempts if attempts is not None else "",
+                "Rec%": round((attempts - rec_errors) / attempts, 3) if attempts not in (None, 0, "") and rec_errors not in (None, "") else "",
+                "BS": stat.get("sBlockSolos", ""),
+                "BA": stat.get("sBlockAssists", ""),
+                "TB": stat.get("sTotalBlocks", ""),
+                "B/S": stat.get("sTotalBlocksPerGame", ""),
+                "BHE": stat.get("sBallHandlingErrors", ""),
+            }
+            rows.append(row)
+
+        if not rows:
+            logger.warning("WMT API returned players but no season stats for team_id=%s", team_id)
+            return None
+
+        return pd.DataFrame(rows)
+    except Exception as e:
+        logger.warning("Failed to fetch WMT API stats for team_id=%s: %s", team_id, e)
+        return None
+
+
 def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
     """
     Fetch a stats page and return a list of pandas DataFrames.
@@ -77,6 +150,17 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
     """
     if not url:
         return None
+
+    # WMT Live Stats API (wmt.games stats pages)
+    if "wmt.games" in url and "stats/season" in url:
+        team_id_match = re.search("/season/(\\d+)", url)
+        team_id = team_id_match.group(1) if team_id_match else None
+        if team_id:
+            df = fetch_wmt_stats_api(team_id)
+            if df is not None:
+                return [df]
+        else:
+            logger.warning("WMT stats URL missing team id: %s", url)
 
     # BoostSport JSON service (Big Ten engage-api.boostsport.ai)
     if "boostsport.ai" in url:
