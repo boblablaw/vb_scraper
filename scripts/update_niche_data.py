@@ -27,6 +27,23 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; vb-scraper-niche/1.0)"
 }
 
+# Politics scoring (mirrors existing helper script)
+POLITICS_WEIGHTS = {
+    "very conservative": -2.0,
+    "conservative": -1.0,
+    "moderate": 0.0,
+    "moderate / independent": 0.0,
+    "liberal": 1.0,
+    "very liberal": 2.0,
+}
+POLL_LABELS = [
+    "very conservative",
+    "conservative",
+    "moderate",
+    "liberal",
+    "very liberal",
+]
+
 
 def fetch_html(url: str) -> Optional[str]:
     try:
@@ -88,6 +105,49 @@ def extract_reviews(slug: str) -> tuple[str, str]:
     return pos, neg
 
 
+def score_to_label(score: float) -> str:
+    if score <= -0.8:
+        return "very conservative"
+    if score <= -0.3:
+        return "conservative"
+    if score < 0.3:
+        return "moderate / independent"
+    if score < 0.8:
+        return "liberal"
+    return "very liberal"
+
+
+def extract_politics_label(slug: str) -> str:
+    """
+    Best-effort parse of politics distribution from Niche students page.
+    Looks for label + percent pairs, computes weighted score.
+    """
+    url = f"https://www.niche.com/colleges/{slug}/students/"
+    html = fetch_html(url)
+    if not html:
+        return ""
+
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ", strip=True).lower()
+    matches = re.findall(
+        r"(very conservative|conservative|moderate|liberal|very liberal)\\s*(\\d+)%", text
+    )
+    if not matches:
+        return ""
+
+    total = 0
+    score = 0.0
+    for label, pct_str in matches:
+        pct = float(pct_str)
+        total += pct
+        weight = POLITICS_WEIGHTS.get(label, 0.0)
+        score += weight * pct
+    if total == 0:
+        return ""
+    score = score / total
+    return score_to_label(score)
+
+
 def update_team(team: dict) -> bool:
     slug = team.get("niche_data_slug")
     if not slug:
@@ -116,7 +176,13 @@ def update_team(team: dict) -> bool:
         niche["review_neg"] = neg
 
     team["niche"] = niche
-    return niche != before
+
+    # Update politics label (best effort; leave untouched if not found)
+    politics_label = extract_politics_label(slug)
+    if politics_label:
+        team["political_label"] = politics_label
+
+    return (niche != before) or bool(politics_label)
 
 
 def main():
