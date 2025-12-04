@@ -65,7 +65,7 @@ def fetch_html(url: str) -> Optional[str]:
         return None
 
 
-def fetch_html_playwright(url: str) -> Optional[str]:
+def fetch_html_playwright(url: str, headless: bool = True, proxy: Optional[str] = None) -> Optional[str]:
     """
     Fallback to Playwright (headless Chromium) for pages that block plain requests.
     Requires playwright to be installed and browsers set up (run `playwright install chromium`).
@@ -74,10 +74,18 @@ def fetch_html_playwright(url: str) -> Optional[str]:
         return None
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            launch_args = {"headless": headless}
+            if proxy:
+                launch_args["proxy"] = {"server": proxy}
+            browser = p.chromium.launch(**launch_args)
             context = browser.new_context(
                 user_agent=HEADERS["User-Agent"],
-                extra_http_headers={"Cookie": COOKIE_STR} if COOKIE_STR else None,
+                extra_http_headers={
+                    "Cookie": COOKIE_STR,
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+                if COOKIE_STR
+                else {"Accept-Language": "en-US,en;q=0.9"},
             )
             page = context.new_page()
             page.goto(url, wait_until="networkidle", timeout=30000)
@@ -116,7 +124,7 @@ def extract_reviews(slug: str) -> tuple[str, str]:
     url = f"https://www.niche.com/colleges/{slug}/reviews/"
     html = fetch_html(url)
     if not html:
-        html = fetch_html_playwright(url)
+        html = fetch_html_playwright(url, headless=True)
     if not html:
         return "", ""
     soup = BeautifulSoup(html, "html.parser")
@@ -161,7 +169,7 @@ def extract_politics_label(slug: str) -> str:
     url = f"https://www.niche.com/colleges/{slug}/students/"
     html = fetch_html(url)
     if not html:
-        html = fetch_html_playwright(url)
+        html = fetch_html_playwright(url, headless=True)
     if not html:
         return ""
 
