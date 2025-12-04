@@ -26,6 +26,7 @@ TEAMS_PATH = ROOT / "settings" / "teams.json"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; vb-scraper-niche/1.0)"
 }
+COOKIE_STR: Optional[str] = None
 
 # Optional Playwright fallback (only used if 403 encountered and module available)
 try:
@@ -54,7 +55,10 @@ POLL_LABELS = [
 
 def fetch_html(url: str) -> Optional[str]:
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
+        headers = dict(HEADERS)
+        if COOKIE_STR:
+            headers["Cookie"] = COOKIE_STR
+        resp = requests.get(url, headers=headers, timeout=20)
         resp.raise_for_status()
         return resp.text
     except requests.RequestException:
@@ -71,7 +75,11 @@ def fetch_html_playwright(url: str) -> Optional[str]:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(user_agent=HEADERS["User-Agent"])
+            context = browser.new_context(
+                user_agent=HEADERS["User-Agent"],
+                extra_http_headers={"Cookie": COOKIE_STR} if COOKIE_STR else None,
+            )
+            page = context.new_page()
             page.goto(url, wait_until="networkidle", timeout=30000)
             content = page.content()
             browser.close()
@@ -225,7 +233,11 @@ def main():
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between requests (seconds)")
     parser.add_argument("--verbose", action="store_true", help="Print per-team status")
     parser.add_argument("--team", action="append", dest="teams_filter", help="Only update specific team(s); can be used multiple times")
+    parser.add_argument("--cookie", type=str, help="Cookie header to use for Niche requests (for bypassing bot protection)")
     args = parser.parse_args()
+
+    global COOKIE_STR
+    COOKIE_STR = args.cookie
 
     teams = json.load(open(args.teams_json, "r", encoding="utf-8"))
     updated = 0
