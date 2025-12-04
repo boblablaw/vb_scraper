@@ -132,7 +132,7 @@ def filter_schools_for_player(player):
 
     def _variants(s: str) -> set[str]:
         base = _norm(s)
-        no_paren = _norm(re.sub(r"\\(.*?\\)", "", s))
+        no_paren = _norm(re.sub(r"\(.*?\)", "", s))
         return {base, no_paren}
 
     wanted_set = set()
