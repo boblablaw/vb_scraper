@@ -8,13 +8,30 @@ import requests
 from bs4 import BeautifulSoup  # not strictly needed, but handy if you extend later
 from io import StringIO
 
-from settings import RPI_TEAM_NAME_ALIASES
+from settings import TEAMS
 from .utils import normalize_text, normalize_school_key
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
 
 RPI_URL = "https://www.ncaa.com/rankings/volleyball-women/d1/ncaa-womens-volleyball-rpi"
+
+
+def _build_alias_map() -> Dict[str, str]:
+    """
+    Build team -> primary alias mapping from settings/teams.json.
+    Uses first alias that differs from the canonical name.
+    """
+    aliases: Dict[str, str] = {}
+    for t in TEAMS:
+        name = t.get("team") or t.get("name")
+        if not name:
+            continue
+        for alias in t.get("team_name_aliases", []) or []:
+            if alias and alias != name:
+                aliases[name] = alias
+                break
+    return aliases
 
 
 def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
@@ -86,7 +103,8 @@ def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
     lookup: Dict[str, Dict[str, str]] = {}
     
     # Reverse the aliases dict: RPI name -> Your team name
-    rpi_to_team = {v: k for k, v in RPI_TEAM_NAME_ALIASES.items()}
+    alias_map = _build_alias_map()
+    rpi_to_team = {v: k for k, v in alias_map.items()}
 
     for _, row in rpi_df.iterrows():
         raw_name = normalize_text(row["team"])
