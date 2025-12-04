@@ -108,6 +108,8 @@ def extract_reviews(slug: str) -> tuple[str, str]:
     url = f"https://www.niche.com/colleges/{slug}/reviews/"
     html = fetch_html(url)
     if not html:
+        html = fetch_html_playwright(url)
+    if not html:
         return "", ""
     soup = BeautifulSoup(html, "html.parser")
     bodies = []
@@ -150,6 +152,8 @@ def extract_politics_label(slug: str) -> str:
     """
     url = f"https://www.niche.com/colleges/{slug}/students/"
     html = fetch_html(url)
+    if not html:
+        html = fetch_html_playwright(url)
     if not html:
         return ""
 
