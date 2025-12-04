@@ -27,6 +27,13 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; vb-scraper-niche/1.0)"
 }
 
+# Optional Playwright fallback (only used if 403 encountered and module available)
+try:
+    from playwright.sync_api import sync_playwright  # type: ignore
+    PLAYWRIGHT_AVAILABLE = True
+except Exception:
+    PLAYWRIGHT_AVAILABLE = False
+
 # Politics scoring (mirrors existing helper script)
 POLITICS_WEIGHTS = {
     "very conservative": -2.0,
@@ -51,6 +58,25 @@ def fetch_html(url: str) -> Optional[str]:
         resp.raise_for_status()
         return resp.text
     except requests.RequestException:
+        return None
+
+
+def fetch_html_playwright(url: str) -> Optional[str]:
+    """
+    Fallback to Playwright (headless Chromium) for pages that block plain requests.
+    Requires playwright to be installed and browsers set up (run `playwright install chromium`).
+    """
+    if not PLAYWRIGHT_AVAILABLE:
+        return None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(user_agent=HEADERS["User-Agent"])
+            page.goto(url, wait_until="networkidle", timeout=30000)
+            content = page.content()
+            browser.close()
+            return content
+    except Exception:
         return None
 
 
@@ -156,6 +182,8 @@ def update_team(team: dict) -> bool:
     url = f"https://www.niche.com/colleges/{slug}/"
     html = fetch_html(url)
     if not html:
+        html = fetch_html_playwright(url)
+    if not html:
         return False
 
     soup = BeautifulSoup(html, "html.parser")
@@ -179,6 +207,8 @@ def update_team(team: dict) -> bool:
 
     # Update politics label (best effort; leave untouched if not found)
     politics_label = extract_politics_label(slug)
+    if not politics_label:
+        politics_label = extract_politics_label(slug)  # second try if first fetch cached None
     if politics_label:
         team["political_label"] = politics_label
 
@@ -197,7 +227,8 @@ def main():
 
     for team in teams:
         name = team.get("team")
-        if update_team(team):
+        changed = update_team(team)
+        if changed:
             updated += 1
             if args.verbose:
                 print(f"[OK] {name}")
