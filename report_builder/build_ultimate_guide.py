@@ -130,12 +130,22 @@ def filter_schools_for_player(player):
     def _norm(s: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
-    wanted_norm = {_norm(x) for x in player.schools}
+    def _variants(s: str) -> set[str]:
+        base = _norm(s)
+        no_paren = _norm(re.sub(r"\\(.*?\\)", "", s))
+        return {base, no_paren}
+
+    wanted_set = set()
+    for w in player.schools:
+        wanted_set |= _variants(w)
+
     filtered = []
     for s in SCHOOLS:
         names_to_check = [s["name"]] + s.get("team_name_aliases", [])
-        norm_names = [_norm(n) for n in names_to_check]
-        if any(n in wanted_norm or any(n in w or w in n for w in wanted_norm) for n in norm_names):
+        cand = set()
+        for n in names_to_check:
+            cand |= _variants(n)
+        if cand & wanted_set:
             filtered.append(s)
     if filtered:
         SCHOOLS[:] = filtered
