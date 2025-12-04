@@ -258,6 +258,25 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
                 logger.error("ERROR fetching stats for %s: %s", team_name, e)
         except Exception as e:
             logger.error("ERROR fetching stats for %s: %s", team_name, e)
+
+    # If roster parsed but all names are empty and stats are available, rebuild from stats
+    if players and all(not (p.get("name") or "").strip() for p in players) and stats_lookup:
+        players = [
+            {
+                "team": team_name,
+                "conference": team_info.get("conference", ""),
+                "name": s.get("player", ""),
+                "position": "",
+                "class_raw": "",
+                "height_raw": "",
+            }
+            for s in stats_lookup.values()
+        ]
+        logger.warning(
+            "Roster for %s had empty names; rebuilt %d players from stats.",
+            team_name,
+            len(players),
+        )
             stats_lookup = {}
 
     rows: List[Dict[str, Any]] = []
