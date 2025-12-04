@@ -818,73 +818,74 @@ def compute_travel_and_fit():
     for s in SCHOOLS:
         # Distance
         if s.get("lat") is None or s.get("lon") is None:
-            # Skip travel computations if coordinates are missing
+            # Skip travel computations if coordinates are missing, but still provide geo/fit defaults
             s["flight_dist_mi"] = s["drive_dist_mi"] = s["drive_time_hr"] = s["flight_time_hr"] = 0
             s["travel_difficulty"] = 10
-            s["geo_score"] = 1.5
-            continue
-        d_miles = haversine_miles(HOME_LAT, HOME_LON, s["lat"], s["lon"])
-        s["flight_dist_mi"] = round(d_miles, 1)
-        s["drive_dist_mi"] = round(d_miles * 1.15, 1)  # fudge factor for roads
-
-        # Times
-        s["drive_time_hr"] = round(s["drive_dist_mi"] / 60.0, 1)  # assume 60 mph avg
-        s["flight_time_hr"] = round(s["flight_dist_mi"] / 450.0, 2)  # assume 450 mph avg jet
-
-        # Travel difficulty: branch by likely mode (short drives vs flights)
-        DRIVE_ONLY_THRESHOLD = 350  # miles; below this we assume you'd just drive
-        info = AIRPORT_INFO.get(s["name"], {})
-        notes = (info.get("notes_from_indy") or "").lower()
-        has_direct = bool(re.search(r"\bnon[- ]?stop\b|\bdirect\b", notes))
-        has_multi_stop = bool(re.search(r"\b2[- ]?stop|\btwo[- ]?stop|\bmulti[- ]?stop", notes))
-
-        drive_minutes_airport = _parse_minutes(info.get("airport_drive_time", ""))
-        congestion_codes = {"ATL", "ORD", "LAX", "JFK", "EWR", "DFW", "DEN", "SFO", "CLT", "IAH", "PHX", "BOS", "LGA"}
-        codes_here = _airport_codes(info)
-        congestion_penalty = 8 if codes_here & congestion_codes else 0
-
-        if s["drive_dist_mi"] <= DRIVE_ONLY_THRESHOLD:
-            # Driving scenario: lighter base, no airport overhead
-            base = s["drive_dist_mi"] / 18.0  # scale so nearby trips stay low, longer drives rise meaningfully
-            base += 6  # small fatigue/parking penalty
+            s["geo_score"] = s.get("geo_score", 1.5)
         else:
-            # Flying scenario: add airport overhead, distance, and congestion
-            base = s["flight_dist_mi"] / 18.0
-            base += drive_minutes_airport / 3.0  # first/last mile to campus
-            base += 20  # airport process (arrive early, parking, baggage/rental)
-            if has_direct:
-                base -= 10
-            elif has_multi_stop:
-                base += 10
-            base += congestion_penalty
-            # Long-haul bump
-            if s["flight_dist_mi"] > 1600:
-                base += 5
+            d_miles = haversine_miles(HOME_LAT, HOME_LON, s["lat"], s["lon"])
+            s["flight_dist_mi"] = round(d_miles, 1)
+            s["drive_dist_mi"] = round(d_miles * 1.15, 1)  # fudge factor for roads
 
-        s["travel_difficulty"] = int(min(100, max(10, base)))
+            # Times
+            s["drive_time_hr"] = round(s["drive_dist_mi"] / 60.0, 1)  # assume 60 mph avg
+            s["flight_time_hr"] = round(s["flight_dist_mi"] / 450.0, 2)  # assume 450 mph avg jet
 
-        # Geo score (higher is better proximity) derived from drive distance
-        if s["drive_dist_mi"] <= 300:
-            s["geo_score"] = 3.0
-        elif s["drive_dist_mi"] <= 600:
-            s["geo_score"] = 2.5
-        elif s["drive_dist_mi"] <= 1000:
-            s["geo_score"] = 2.0
-        elif s["drive_dist_mi"] <= 1500:
-            s["geo_score"] = 1.5
-        else:
-            s["geo_score"] = 1.0
+            # Travel difficulty: branch by likely mode (short drives vs flights)
+            DRIVE_ONLY_THRESHOLD = 350  # miles; below this we assume you'd just drive
+            info = AIRPORT_INFO.get(s["name"], {})
+            notes = (info.get("notes_from_indy") or "").lower()
+            has_direct = bool(re.search(r"\bnon[- ]?stop\b|\bdirect\b", notes))
+            has_multi_stop = bool(re.search(r"\b2[- ]?stop|\btwo[- ]?stop|\bmulti[- ]?stop", notes))
+
+            drive_minutes_airport = _parse_minutes(info.get("airport_drive_time", ""))
+            congestion_codes = {"ATL", "ORD", "LAX", "JFK", "EWR", "DFW", "DEN", "SFO", "CLT", "IAH", "PHX", "BOS", "LGA"}
+            codes_here = _airport_codes(info)
+            congestion_penalty = 8 if codes_here & congestion_codes else 0
+
+            if s["drive_dist_mi"] <= DRIVE_ONLY_THRESHOLD:
+                # Driving scenario: lighter base, no airport overhead
+                base = s["drive_dist_mi"] / 18.0  # scale so nearby trips stay low, longer drives rise meaningfully
+                base += 6  # small fatigue/parking penalty
+            else:
+                # Flying scenario: add airport overhead, distance, and congestion
+                base = s["flight_dist_mi"] / 18.0
+                base += drive_minutes_airport / 3.0  # first/last mile to campus
+                base += 20  # airport process (arrive early, parking, baggage/rental)
+                if has_direct:
+                    base -= 10
+                elif has_multi_stop:
+                    base += 10
+                base += congestion_penalty
+                # Long-haul bump
+                if s["flight_dist_mi"] > 1600:
+                    base += 5
+
+            s["travel_difficulty"] = int(min(100, max(10, base)))
+
+            # Geo score (higher is better proximity) derived from drive distance
+            if s["drive_dist_mi"] <= 300:
+                s["geo_score"] = 3.0
+            elif s["drive_dist_mi"] <= 600:
+                s["geo_score"] = 2.5
+            elif s["drive_dist_mi"] <= 1000:
+                s["geo_score"] = 2.0
+            elif s["drive_dist_mi"] <= 1500:
+                s["geo_score"] = 1.5
+            else:
+                s["geo_score"] = 1.0
 
         # Academic score
-        tier = s["tier"]
+        tier = s.get("tier", "")
         s["academic_score"] = TIER_POINTS.get(tier, 2.0)
 
         # Fit score:
         # Fit = (academics * 0.4) + (vb_opp_score * 0.4) + (geo_score * 0.2)
+        geo_score = s.get("geo_score", 1.5)
         s["fit_score"] = round(
             s["academic_score"] * 0.4 +
-            s["vb_opp_score"] * 0.4 +
-            s["geo_score"] * 0.2,
+            s.get("vb_opp_score", 2.0) * 0.4 +
+            geo_score * 0.2,
             2
         )
 

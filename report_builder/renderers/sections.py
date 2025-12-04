@@ -452,13 +452,11 @@ def build_school_pages(core, story, styles):
             story.append(air_table)
             story.append(Spacer(1, 0.12 * inch))
 
-        risk_text = core.RISK_WATCHOUTS.get(s["name"])
+        risk_text = s.get("risk_watchouts") or core.RISK_WATCHOUTS.get(s["name"])
         if risk_text:
-            risk_para = Paragraph(
-                f"<b>Risk / Watchouts:</b> {risk_text}",
-                sub,
+            story.append(
+                Paragraph(f"<b>Risk / Watchouts:</b> {risk_text}", sub)
             )
-            story.append(risk_para)
             story.append(Spacer(1, 0.1 * inch))
 
         coaches = s.get("coaches", [])
