@@ -166,7 +166,11 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
     if "boostsport.ai" in url:
         try:
             logger.info("Fetching BoostSport JSON stats: %s", url)
-            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+            resp = requests.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=60,  # BoostSport can be slow; give it more time
+            )
             resp.raise_for_status()
             data = resp.json()
             players = data.get("data", [])
