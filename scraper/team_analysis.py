@@ -277,7 +277,6 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
             team_name,
             len(players),
         )
-            stats_lookup = {}
 
     rows: List[Dict[str, Any]] = []
 
