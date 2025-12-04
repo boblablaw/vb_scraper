@@ -784,6 +784,9 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
     lookup: Dict[str, Dict[str, Any]] = {}
     for _, row in merged_df.iterrows():
         raw_name = str(row["player"])
+        low = raw_name.strip().lower()
+        if not raw_name or low in {"nan", "team totals", "team total"} or ("team" in low and "total" in low):
+            continue
         key = canonical_name(raw_name)
         if not key:
             continue
