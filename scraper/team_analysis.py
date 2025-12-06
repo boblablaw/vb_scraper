@@ -1,8 +1,9 @@
 # team_analysis.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urljoin, urlparse, urlsplit, urlunsplit
 
 from settings import TEAMS
 import requests
@@ -21,6 +22,51 @@ from .stats import build_stats_lookup, attach_stats_to_player
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+PLAYER_PHOTO_DIR = Path(__file__).resolve().parent.parent / "player_photos"
+
+
+def download_player_photo(photo_url: str, team_name: str, player_name: str, photo_dir: Path = PLAYER_PHOTO_DIR) -> str:
+    """
+    Download a player headshot to player_photos/ and return the filename.
+    """
+    if not photo_url:
+        return ""
+    try:
+        photo_dir.mkdir(parents=True, exist_ok=True)
+        parsed = urlsplit(photo_url)
+        ext = Path(parsed.path).suffix or ".jpg"
+        slug = re.sub(r"[^A-Za-z0-9]+", "_", f"{team_name}_{player_name}").strip("_") or "player"
+        filename = f"{slug}{ext}"
+        dest = photo_dir / filename
+        if dest.exists():
+            return filename
+        clean_url = _normalize_sidearm_photo_url(photo_url)
+        resp = requests.get(clean_url, timeout=20)
+        resp.raise_for_status()
+        dest.write_bytes(resp.content)
+        return filename
+    except Exception as e:
+        logger.debug("Photo download failed for %s (%s): %s", player_name, photo_url, e)
+        return ""
+
+
+def _normalize_sidearm_photo_url(photo_url: str) -> str:
+    """
+    Strip Sidearm's crop proxy URLs so we download the original asset.
+    """
+    if not photo_url:
+        return photo_url
+    try:
+        parts = urlsplit(photo_url)
+        if parts.path.startswith("/crop"):
+            query = parse_qs(parts.query)
+            target = query.get("url")
+            if target:
+                return target[0]
+    except Exception:
+        logger.debug("Unable to normalize photo URL %s", photo_url)
+    return photo_url
 
 
 def strip_year_from_url(url: str) -> str:
@@ -281,6 +327,15 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
     rows: List[Dict[str, Any]] = []
 
     for p in players:
+        photo_url = p.get("photo_url", "")
+        full_photo_url = urljoin(roster_url, photo_url) if photo_url else ""
+        if full_photo_url and not p.get("photo_filename"):
+            fname = download_player_photo(full_photo_url, team_name, p.get("name", ""))
+            if fname:
+                p["photo_filename"] = fname
+        # Bio scraping temporarily disabled
+        p["bio"] = ""
+
         position_raw = p.get("position_raw", p.get("position", ""))
         position_norm = p.get("position_norm", "")
 
@@ -297,6 +352,11 @@ def analyze_team(team_info: Dict[str, Any], rpi_lookup: Dict[str, Dict[str, str]
             "position": position_norm,
             "class": class_norm,
             "height": height_norm,
+            "jersey_number": p.get("jersey_number", ""),
+            "hometown": p.get("hometown", ""),
+            "high_school": p.get("high_school", ""),
+            "bio": p.get("bio", ""),
+            "photo_filename": p.get("photo_filename", ""),
         }
 
         base = attach_stats_to_player(base, stats_lookup)

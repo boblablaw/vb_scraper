@@ -12,6 +12,7 @@ Validates:
 """
 
 import re
+import json
 import os
 import argparse
 from typing import Dict, List, Tuple, Set
@@ -29,6 +30,8 @@ VALID_POSITIONS = {'S', 'OH', 'RS', 'MB', 'DS', 'L'}
 VALID_CLASSES = {'Fr', 'So', 'Jr', 'Sr', 'R-Fr', 'R-So', 'R-Jr', 'R-Sr', 'Gr', 'Fifth'}
 # Accept dash or apostrophe heights for 4–7 feet (e.g., 6-1, 6'1")
 HEIGHT_PATTERN = re.compile(r'^[4-7]-\d{1,2}$|^[4-7]\'\s*\d{1,2}"?$')
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+PHONE_REGEX = re.compile(r"^\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(\s*(x|ext\.?)\s*\d+)?$")
 NON_PLAYER_KEYWORDS = [
     'coach', 'assistant', 'director', 'coordinator', 'manager', 
     'trainer', 'admin', 'staff', 'volunteer', 'graduate assistant'
@@ -492,25 +495,35 @@ class DataValidator:
         os.makedirs(reports_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        if missing_stats_teams:
-            stats_path = os.path.join(reports_dir, f"missing_stats_{timestamp}.txt")
-            with open(stats_path, "w") as f:
-                f.write(f"# Teams with no stats columns populated ({len(missing_stats_teams)})\n\n")
-                for team in sorted(missing_stats_teams):
-                    f.write(team + "\n")
-            print(f"⚠️  {len(missing_stats_teams)} teams have no stats; list written to {stats_path}")
-        else:
-            print("✓ All teams have some stat data")
+        stats_path = os.path.join(reports_dir, f"missing_stats_{timestamp}.txt")
+        with open(stats_path, "w") as f:
+            f.write(f"# Teams with no stats columns populated ({len(missing_stats_teams)})\n\n")
+            for team in sorted(missing_stats_teams):
+                f.write(team + "\n")
+        print(f"Teams with no stats file written to {stats_path} (count={len(missing_stats_teams)})")
 
-        if missing_digs_teams:
-            digs_path = os.path.join(reports_dir, f"missing_defensive_stats_{timestamp}.txt")
-            with open(digs_path, "w") as f:
-                f.write(f"# Teams missing digs (defensive stats) ({len(missing_digs_teams)})\n\n")
-                for team in sorted(missing_digs_teams):
-                    f.write(team + "\n")
-            print(f"⚠️  {len(missing_digs_teams)} teams missing digs; list written to {digs_path}")
-        else:
-            print("✓ All teams have digs recorded")
+        digs_path = os.path.join(reports_dir, f"missing_defensive_stats_{timestamp}.txt")
+        with open(digs_path, "w") as f:
+            f.write(f"# Teams missing digs (defensive stats) ({len(missing_digs_teams)})\n\n")
+            for team in sorted(missing_digs_teams):
+                f.write(team + "\n")
+        print(f"Teams missing digs file written to {digs_path} (count={len(missing_digs_teams)})")
+
+        # Prune old reports (keep latest 2 of each type)
+        def _prune(prefix: str):
+            files = sorted(
+                [os.path.join(reports_dir, p) for p in os.listdir(reports_dir) if p.startswith(prefix)],
+                key=os.path.getmtime,
+                reverse=True,
+            )
+            for old in files[2:]:
+                try:
+                    os.remove(old)
+                except OSError:
+                    pass
+
+        _prune("missing_stats_")
+        _prune("missing_defensive_stats_")
     
     def analyze_log_file(self):
         """Analyze scraper log for errors and warnings."""
@@ -625,6 +638,7 @@ class DataValidator:
             f.write(f"- Missing classes: {self.stats['missing_class']}\n")
             f.write(f"- Invalid classes: {self.stats['invalid_class']}\n")
             f.write(f"- Failed class normalization: {self.stats.get('failed_class_normalization', 0)}\n")
+            f.write(f"- Invalid emails: {self.stats.get('invalid_emails', 0)}\n")
             f.write(f"- Suspected non-players: {self.stats['suspected_non_players']}\n")
             f.write(f"- Duplicate players: {self.stats['duplicate_players']}\n")
             f.write(f"- Teams with issues: {self.stats['teams_with_issues']}\n")
@@ -663,6 +677,15 @@ class DataValidator:
                     f.write(f"- **{item['Team']}**: {item['Name']}\n")
                 if len(missing_players) > max_list:
                     f.write(f"- ... and {len(missing_players) - max_list} more\n")
+                f.write("\n")
+            
+            if self.issues.get('invalid_emails'):
+                f.write("## Invalid Emails (first 100)\n\n")
+                for item in self.issues['invalid_emails'][:100]:
+                    name_part = f"{item.get('name', '')} - " if item.get('name') else ""
+                    f.write(f"- **{item.get('team','')}**: {name_part}{item['value']} ({item['column']})\n")
+                if len(self.issues['invalid_emails']) > 100:
+                    f.write(f"- ... and {len(self.issues['invalid_emails']) - 100} more\n")
                 f.write("\n")
             
             # Detailed issues
@@ -761,6 +784,21 @@ class DataValidator:
                     f.write(f"- {team}\n")
                 f.write(f"\nTotal teams missing digs: {self.stats.get('teams_missing_digs', 0)}\n\n")
             
+            if self.stats.get('missing_coach_teams', 0) or self.stats.get('invalid_coach_contacts', 0):
+                f.write("## Coaches Cache Quality\n\n")
+                f.write(f"- Teams with no coaches in cache: {self.stats.get('missing_coach_teams', 0)}\n")
+                f.write(f"- Invalid coach emails/phones: {self.stats.get('invalid_coach_contacts', 0)}\n\n")
+                if self.issues.get('missing_coach_teams'):
+                    f.write("### Teams Missing Coaches\n\n")
+                    for team in self.issues['missing_coach_teams'][:50]:
+                        f.write(f"- {team}\n")
+                    f.write("\n")
+                if self.issues.get('invalid_coach_contacts'):
+                    f.write("### Invalid Coach Contacts (first 50)\n\n")
+                    for item in self.issues['invalid_coach_contacts'][:50]:
+                        f.write(f"- {item['team']}: {item['coach']} ({item['field']}: {item['value']})\n")
+                    f.write("\n")
+            
             if self.issues.get('teams_with_scrape_errors'):
                 f.write("## Teams with Scraping Errors\n\n")
                 for team in self.issues['teams_with_scrape_errors'][:50]:
@@ -768,6 +806,20 @@ class DataValidator:
                 f.write("\n")
         
         print(f"\n✓ Validation report written to: {report_path}")
+
+        # Keep only the two most recent validation reports
+        reports_dir = os.path.dirname(report_path)
+        reports = sorted(
+            [os.path.join(reports_dir, p) for p in os.listdir(reports_dir) if p.startswith("validation_report_")],
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        for old in reports[2:]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+
         return report_path
     
     def export_problem_teams(self):
@@ -803,7 +855,103 @@ class DataValidator:
                         f.write(f"  # {issue}\n")
         
         print(f"✓ Problem teams list written to: {output_path}")
+
+        # Keep only the two most recent problem team files
+        files = sorted(
+            [os.path.join(reports_dir, p) for p in os.listdir(reports_dir) if p.startswith("problem_teams_")],
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        for old in files[2:]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+
         return output_path, len(problem_teams)
+
+    def validate_emails(self):
+        """Validate email fields present in the export (any column containing 'email')."""
+        print("\n=== Validating Emails ===")
+        email_cols = [c for c in self.df.columns if "email" in c.lower()]
+        if not email_cols:
+            print("No email columns found in export; skipping email validation.")
+            self.stats["invalid_emails"] = 0
+            self.issues["invalid_emails"] = []
+            return
+
+        invalid = []
+        for col in email_cols:
+            for idx, val in self.df[col].items():
+                if pd.isna(val) or str(val).strip() == "":
+                    continue
+                email = str(val).strip()
+                if not EMAIL_REGEX.match(email):
+                    entry = {
+                        "row": idx,
+                        "team": self.df.loc[idx, "Team"] if "Team" in self.df.columns else "",
+                        "name": self.df.loc[idx, "Name"] if "Name" in self.df.columns else "",
+                        "column": col,
+                        "value": email,
+                    }
+                    invalid.append(entry)
+
+        self.stats["invalid_emails"] = len(invalid)
+        self.issues["invalid_emails"] = invalid
+
+        if invalid:
+            print(f"⚠️  {len(invalid)} invalid emails found across {len(email_cols)} columns")
+        else:
+            print("✓ All email addresses look valid")
+
+    def validate_coaches_cache(self, cache_path: str = "settings/coaches_cache.json"):
+        """Validate coaches cache: missing teams, invalid emails/phones."""
+        print("\n=== Validating Coaches Cache ===")
+        if not os.path.exists(cache_path):
+            print(f"⚠️  Coaches cache not found at {cache_path}")
+            self.stats["coaches_cache_missing"] = True
+            return
+
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            teams_cache = data.get("teams", {})
+        except Exception as exc:
+            print(f"⚠️  Unable to read coaches cache: {exc}")
+            self.stats["coaches_cache_missing"] = True
+            return
+
+        missing = []
+        invalid_contacts = []
+        for team in TEAMS:
+            team_name = team["team"]
+            coaches = teams_cache.get(team_name, {}).get("coaches", [])
+            if not coaches:
+                missing.append(team_name)
+                self.team_issues[team_name].append("No coaches in cache")
+                continue
+            for coach in coaches:
+                email = coach.get("email", "")
+                phone = coach.get("phone", "")
+                if email and not EMAIL_REGEX.match(email.strip()):
+                    invalid_contacts.append({"team": team_name, "coach": coach.get("name", ""), "field": "email", "value": email})
+                if phone and not PHONE_REGEX.match(str(phone).strip()):
+                    invalid_contacts.append({"team": team_name, "coach": coach.get("name", ""), "field": "phone", "value": phone})
+
+        self.stats["missing_coach_teams"] = len(missing)
+        self.stats["invalid_coach_contacts"] = len(invalid_contacts)
+        self.issues["missing_coach_teams"] = missing
+        self.issues["invalid_coach_contacts"] = invalid_contacts
+
+        if missing:
+            print(f"⚠️  {len(missing)} teams with no coaches in cache")
+        else:
+            print("✓ All teams have at least one coach in cache")
+
+        if invalid_contacts:
+            print(f"⚠️  {len(invalid_contacts)} coach contacts with invalid email/phone")
+        else:
+            print("✓ Coach contact formats look valid")
     
     def run_full_validation(self):
         """Run all validation checks."""
@@ -818,6 +966,8 @@ class DataValidator:
         self.detect_non_players()
         self.check_duplicates()
         self.validate_team_data()
+        self.validate_emails()
+        self.validate_coaches_cache()
         self.check_stats_completeness()
         self.check_missing_teams()
         self.analyze_log_file()

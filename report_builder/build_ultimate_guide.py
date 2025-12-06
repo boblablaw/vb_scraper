@@ -221,16 +221,24 @@ def enrich_schools_from_csv():
             record_val = None
         s["record"] = str(record_val) if record_val is not None else "N/A"
 
-        # Compute VB opportunity score from projected_setter_count
-        proj = None
-        if "projected_setter_count" in row:
-            proj = row["projected_setter_count"]
+        # Compute VB opportunity score using position-specific projected counts
+        pos = (getattr(PLAYER, "position", "") or "").upper()
+        if "MB" in pos or "MH" in pos:
+            proj_field = "projected_middle_count"
+        elif "OH" in pos or "RS" in pos:
+            proj_field = "projected_pin_count"
+        elif "DS" in pos or "L" in pos:
+            proj_field = "projected_def_count"
+        else:
+            proj_field = "projected_setter_count"
+
+        proj = row.get(proj_field, None)
         try:
             proj = float(proj)
         except (TypeError, ValueError):
             proj = None
 
-        # Base opportunity score: fewer effective setters = higher score
+        # Base opportunity score: fewer players at that position = higher score
         if proj is None:
             base = s.get("vb_opp_score", 2.5)  # fall back to existing
         elif proj <= 1:
@@ -243,8 +251,8 @@ def enrich_schools_from_csv():
             base = 2.0
 
         offense = str(s.get("offense_type", "")).strip()
-        # Slight penalty if running a 6-2 with multiple setters
-        if offense == "6-2" and proj is not None and proj >= 2:
+        # Slight penalty only for setters in a 6-2 with multiple setters
+        if proj_field == "projected_setter_count" and offense == "6-2" and proj is not None and proj >= 2:
             base -= 0.2
 
         # Clamp and assign
@@ -360,21 +368,59 @@ def _is_graduating_class(cls_val: str) -> bool:
 
 
 def _parse_incoming_list(raw: str, default_pos: str) -> list[dict[str, str]]:
-    """Parse comma-separated incoming names; keep optional position hints."""
+    """Parse comma-separated incoming names; keep optional position/class/transfer hints.
+
+    Supports formats like:
+        "Molly Beatty (So. Setter - Transfer)"
+        "Isabella Sohl (Setter)"
+    """
     if not raw or (isinstance(raw, float) and pd.isna(raw)):
         return []
     entries = []
+    CLASS_MAP = {
+        "fr": "Fr",
+        "fr.": "Fr",
+        "so": "So",
+        "so.": "So",
+        "soph": "So",
+        "jr": "Jr",
+        "jr.": "Jr",
+        "sr": "Sr",
+        "sr.": "Sr",
+        "gr": "Gr",
+        "gs": "Gr",
+    }
+
     for part in str(raw).split(","):
         name = part.strip()
         if not name:
             continue
-        # Strip any inline position text; use provided default pos separately
         pos = default_pos
+        cls = ""
+        is_transfer = False
+
         if "(" in name and ")" in name:
             base = name.split("(")[0].strip()
+            inside = name[name.find("(") + 1 : name.rfind(")")].strip()
+            tokens = re.split("[\\s/-]+", inside)
+            for tok in tokens:
+                t = tok.strip().lower()
+                if t in CLASS_MAP:
+                    cls = CLASS_MAP[t]
+                if t.startswith("set"):
+                    pos = "S"
+                elif t.startswith("pin") or t in ("oh", "rs"):
+                    pos = "OH/RS"
+                elif t.startswith("mb") or "middle" in t:
+                    pos = "MB"
+                elif t in ("ds", "lib", "libero"):
+                    pos = "DS/L"
+                if "transfer" in t:
+                    is_transfer = True
         else:
             base = name
-        entries.append({"name": base, "position": pos})
+
+        entries.append({"name": base, "position": pos, "class": cls, "is_transfer": is_transfer})
     return entries
 
 
@@ -615,10 +661,11 @@ def enrich_rosters_from_csv():
                         if name_key in seen_names:
                             continue
                         seen_names.add(name_key)
+                        class_val = inc.get("class") or "Fr"
                         players.append(
                             {
                                 "name": name_str,
-                                "class": "Fr",
+                                "class": class_val,
                                 "height": "",
                                 "kills": "",
                                 "assists": "",
@@ -722,9 +769,60 @@ def _position_keys(text: str) -> set[str]:
     return keys
 
 
+def _prod_weight(pos_keys: set[str], player: dict) -> float:
+    """
+    Heuristic production weight based on last-season stats for a position group.
+    Uses primary stats by position:
+      - Setters: assists
+      - Pins/Middles: kills
+      - Defenders: digs
+    Returns 0.0–1.0 per player.
+    """
+    def _to_float(val):
+        try:
+            f = float(val)
+            return f if not math.isnan(f) else 0.0
+        except Exception:
+            return 0.0
+
+    assists = _to_float(player.get("assists") or player.get("A") or player.get("assists_per_set"))
+    kills = _to_float(player.get("kills") or player.get("K"))
+    digs = _to_float(player.get("digs") or player.get("D"))
+
+    # Default thresholds
+    if "s" in pos_keys:
+        # Setters: assists thresholds
+        if assists >= 800:
+            return 1.0
+        if assists >= 400:
+            return 0.5
+        if assists >= 200:
+            return 0.3
+        return 0.1
+    if "mb" in pos_keys or "pin" in pos_keys:
+        # Attackers: kills thresholds
+        if kills >= 300:
+            return 1.0
+        if kills >= 150:
+            return 0.5
+        if kills >= 75:
+            return 0.3
+        return 0.1
+    if "def" in pos_keys:
+        # Defenders: digs thresholds
+        if digs >= 400:
+            return 1.0
+        if digs >= 250:
+            return 0.5
+        if digs >= 150:
+            return 0.3
+        return 0.1
+    return 0.2
+
+
 def compute_vb_opportunity_score(roster, player_position: str | None):
     """
-    Heuristic: fewer experienced players at the same position => higher opportunity.
+    Heuristic: fewer experienced/productive players at the same position => higher opportunity.
     Returns score on a 1.0–3.0 scale (3 = best opportunity).
     """
     if not player_position:
@@ -743,7 +841,10 @@ def compute_vb_opportunity_score(roster, player_position: str | None):
         return 3.0
 
     exp_load = sum(_exp_weight(p.get("class", "")) for p in same_pos)
-    score = max(1.0, min(3.0, 3.0 - 0.4 * exp_load))
+    prod_load = sum(_prod_weight(player_keys, p) for p in same_pos)
+    # Blend experience and production; each point of load knocks down score.
+    score = 3.0 - 0.25 * exp_load - 0.25 * prod_load
+    score = max(1.0, min(3.0, score))
     return round(score, 2)
 
 
@@ -769,11 +870,11 @@ def auto_risk_watchouts(s: dict, player_position: str | None) -> str:
 
     if vb_opp <= 2.2:
         msgs.append(
-            "Setter room may be crowded; monitor depth chart and portal additions closely."
+            "Position group may be crowded; monitor depth chart and portal additions closely."
         )
     elif vb_opp >= 2.9:
         msgs.append(
-            "High current opportunity, but staff may bring in more setters quickly."
+            "High current opportunity, but staff may add competition quickly."
         )
 
     if drive > 800 or travel_diff >= 60:
@@ -813,7 +914,7 @@ def compute_travel_and_fit():
     - flight_time_hr
     - travel_difficulty (0–100)
     - academic_score
-    - fit_score
+    - fit_score (academics 40% + VB opp 35% + geo 15% + RPI 10%)
     """
     for s in SCHOOLS:
         # Distance
@@ -880,12 +981,23 @@ def compute_travel_and_fit():
         s["academic_score"] = TIER_POINTS.get(tier, 2.0)
 
         # Fit score:
-        # Fit = (academics * 0.4) + (vb_opp_score * 0.4) + (geo_score * 0.2)
+        # Fit = academics (40%) + VB opp (35%) + geo (15%) + RPI (10%, inverted: higher rank better)
         geo_score = s.get("geo_score", 1.5)
+        vb_score = s.get("vb_opp_score", 2.0)
+        rpi_rank = s.get("rpi_rank")
+        if isinstance(rpi_rank, (int, float)) and not pd.isna(rpi_rank):
+            # Normalize RPI: top rank -> 3.0, worst rank -> 2.0 (soft influence)
+            # Using 1..350 range typical; clamp to avoid extremes.
+            rpi_norm = max(1, min(350, float(rpi_rank)))
+            rpi_score = 3.0 - (rpi_norm - 1) * (1.0 / 349)  # linear 3.0 -> 2.0
+        else:
+            rpi_score = 2.5
+
         s["fit_score"] = round(
-            s["academic_score"] * 0.4 +
-            s.get("vb_opp_score", 2.0) * 0.4 +
-            geo_score * 0.2,
+            s["academic_score"] * 0.40 +
+            vb_score * 0.35 +
+            geo_score * 0.15 +
+            rpi_score * 0.10,
             2
         )
 

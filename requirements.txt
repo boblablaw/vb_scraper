@@ -3,3 +3,6 @@ requests
 beautifulsoup4
 lxml
 pdfplumber
+sqlalchemy>=2.0
+fastapi>=0.115
+uvicorn>=0.27

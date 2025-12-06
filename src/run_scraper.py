@@ -157,6 +157,11 @@ def main():
         "position",
         "class",
         "height",
+        "jersey_number",
+        "hometown",
+        "high_school",
+        "bio",
+        "photo_filename",
         
         # Stats fields
         "matches_started",
@@ -219,6 +224,11 @@ def main():
         "position": "Position",
         "class": "Class",
         "height": "Height",
+        "jersey_number": "Jersey",
+        "hometown": "Hometown",
+        "high_school": "High School",
+        "bio": "Bio",
+        "photo_filename": "Photo File",
         "matches_started": "MS",
         "matches_played": "MP",
         "sets_played": "SP",

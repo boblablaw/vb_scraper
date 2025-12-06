@@ -53,3 +53,9 @@ Thumbs.db
 
 # Logos
 logos/
+
+# Stats
+stats/
+
+# Player photos
+player_photos/

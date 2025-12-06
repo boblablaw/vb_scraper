@@ -155,10 +155,13 @@ def build_cover_page(core, story, styles):
     )
 
     story.append(Spacer(1, 0.6 * inch))
-    story.append(Paragraph("2025 Transfer Opportunity Analysis – Setter Edition", title_style))
+    pos = getattr(core.PLAYER, "position", "") or "Player"
+    edition = f"{pos} Edition"
+    story.append(Paragraph(f"2025 Transfer Opportunity Analysis – {edition}", title_style))
     story.append(Spacer(1, 0.15 * inch))
+    # Subtitle uses the player's position dynamically
     story.append(Paragraph(
-        "A comprehensive analysis of setter depth, opportunity, culture & travel logistics",
+        f"A comprehensive analysis of {pos.lower()} depth, opportunity, culture & travel logistics",
         subtitle_style,
     ))
     story.append(Spacer(1, 0.35 * inch))
@@ -239,16 +242,52 @@ def build_fit_score_table(core, story, styles):
         leading=18,
     )
     story.append(Paragraph("Overall Fit Score Ranking", heading))
-    story.append(Spacer(1, 0.15 * inch))
+    story.append(Spacer(1, 0.08 * inch))
+    expl_style = ParagraphStyle(
+        "fit_expl",
+        parent=styles["BodyText"],
+        fontSize=9,
+        leading=11,
+    )
+    story.append(Paragraph(
+        "<b>Fit Score</b> = academics (40%) + VB opportunity (40%) + geography (20%). "
+        "<b>VB Opp</b> uses projected depth for the player's position (setters, pins, middles, defenders) with offense-type adjustments for setters (5-1 / 6-2). "
+        "<b>Geo Score</b> is proximity from home (higher = closer).",
+        expl_style,
+    ))
+    story.append(Spacer(1, 0.12 * inch))
 
     sorted_schools = sorted(core.SCHOOLS, key=lambda x: x["fit_score"], reverse=True)
-    data = [["Rank", "School", "Tier", "RPI", "Fit Score", "VB Opp", "Geo Score"]]
+    hdr_style = ParagraphStyle(
+        "fit_hdr",
+        parent=styles["BodyText"],
+        fontSize=9.5,
+        leading=11,
+        alignment=1,
+        fontName="Helvetica-Bold",
+    )
+    data = [
+        [
+            "Rank",
+            "School",
+            Paragraph("Academic<br/>Tier", hdr_style),
+            "RPI",
+            Paragraph("Fit<br/>Score", hdr_style),
+            Paragraph("VB<br/>Opp", hdr_style),
+            Paragraph("Geo<br/>Score", hdr_style),
+        ]
+    ]
     for i, s in enumerate(sorted_schools, start=1):
-        rpi_display = (
-            f"{int(s['rpi_rank'])}"
-            if isinstance(s.get("rpi_rank"), (int, float))
-            else "N/A"
-        )
+        rpi_val = s.get("rpi_rank")
+        if isinstance(rpi_val, float) and (rpi_val != rpi_val):  # NaN
+            rpi_display = "N/A"
+        elif isinstance(rpi_val, (int, float)):
+            try:
+                rpi_display = f"{int(rpi_val)}"
+            except (ValueError, TypeError):
+                rpi_display = "N/A"
+        else:
+            rpi_display = "N/A"
         data.append([
             i,
             s["short"],
@@ -261,7 +300,7 @@ def build_fit_score_table(core, story, styles):
 
     table = Table(
         data,
-        colWidths=[0.5*inch, 2.1*inch, 0.6*inch, 0.7*inch, 0.9*inch, 0.9*inch, 0.9*inch],
+        colWidths=[0.5*inch, 2.0*inch, 0.8*inch, 0.7*inch, 0.9*inch, 0.9*inch, 0.9*inch],
     )
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
@@ -284,10 +323,22 @@ def build_travel_matrix(core, story, styles):
         leading=18,
     )
     story.append(Paragraph("Travel Snapshot (from home)", heading))
-    story.append(Spacer(1, 0.15 * inch))
+    story.append(Spacer(1, 0.08 * inch))
+    expl_style = ParagraphStyle(
+        "travel_expl",
+        parent=styles["BodyText"],
+        fontSize=9,
+        leading=11,
+    )
+    story.append(Paragraph(
+        "Flight hours assume ~450 mph cruise; drive hours assume ~60 mph. "
+        "Travel Difficulty blends flight/drive time, airport overhead, congestion, and long-haul bumps (10–100 scale).",
+        expl_style,
+    ))
+    story.append(Spacer(1, 0.12 * inch))
 
     data = [["School", "Drive (mi)", "Drive (hr)", "Flight (mi)", "Flight (hr)", "Travel Diff"]]
-    for s in core.SCHOOLS:
+    for s in sorted(core.SCHOOLS, key=lambda x: (x.get("travel_difficulty", 1e9), x.get("drive_dist_mi", 1e9))):
         data.append([
             s["short"],
             f"{s['drive_dist_mi']:.0f}",
@@ -356,7 +407,10 @@ def build_school_pages(core, story, styles):
         story.append(notes_table)
         story.append(PageBreak())
 
-    for s in core.SCHOOLS:
+    # Sort detail pages by fit score (best first)
+    sorted_schools = sorted(core.SCHOOLS, key=lambda x: x.get("fit_score", 0), reverse=True)
+
+    for s in sorted_schools:
         story.append(Paragraph(s["name"], heading))
         story.append(Spacer(1, 0.08 * inch))
 
@@ -369,11 +423,16 @@ def build_school_pages(core, story, styles):
                 overall_grade = niche.get("overall_grade", "N/A")
                 academics_grade = niche.get("academics_grade", "N/A")
                 value_grade = niche.get("value_grade", "N/A")
-                rpi_display = (
-                    f"{int(s['rpi_rank'])}"
-                    if isinstance(s.get("rpi_rank"), (int, float))
-                    else "N/A"
-                )
+                rpi_val = s.get("rpi_rank")
+                if isinstance(rpi_val, float) and (rpi_val != rpi_val):
+                    rpi_display = "N/A"
+                elif isinstance(rpi_val, (int, float)):
+                    try:
+                        rpi_display = f"{int(rpi_val)}"
+                    except (ValueError, TypeError):
+                        rpi_display = "N/A"
+                else:
+                    rpi_display = "N/A"
                 record_display = s.get("record", "N/A")
                 politics_label = s.get("politics_label") or "N/A"
 
@@ -431,7 +490,7 @@ def build_school_pages(core, story, styles):
                 [Paragraph("<b>Air Travel Notes</b>", sub)],
                 [Paragraph(f"Nearest major airport: {airport_name} ({airport_code})", sub)],
                 [Paragraph(f"Approx. drive to airport: {drive_time}", sub)],
-                [Paragraph(f"From IND: {notes}", sub)],
+                [Paragraph(f"{notes}", sub)],
             ]
 
             air_table = Table(
@@ -516,7 +575,7 @@ def build_school_pages(core, story, styles):
             story.append(Paragraph(s["name"], heading))
             story.append(Spacer(1, 0.05 * inch))
             story.append(Paragraph(
-                "Projected 2026 Roster Snapshot (key contributors)",
+                "Projected 2026 Roster",
                 roster_heading,
             ))
             story.append(Spacer(1, 0.05 * inch))

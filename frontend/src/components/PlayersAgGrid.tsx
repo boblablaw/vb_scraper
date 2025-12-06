@@ -1,0 +1,311 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  ColDef,
+  FirstDataRenderedEvent,
+  ValueFormatterParams,
+} from "ag-grid-community";
+import { AgGridReact } from "ag-grid-react";
+
+export type PlayerGridRow = {
+  id: number;
+  name: string;
+  teamLabel: string;
+  conferenceLabel: string;
+  position?: string | null;
+  classYear?: string | null;
+  heightInches?: number | null;
+  // Stats fields (ms, mp, etc.) are added dynamically via spread.
+  [key: string]: string | number | null | undefined;
+};
+
+const numericColumns = [
+  "ms",
+  "mp",
+  "sp",
+  "pts",
+  "pts_per_set",
+  "k",
+  "k_per_set",
+  "ae",
+  "ta",
+  "hit_pct",
+  "assists",
+  "assists_per_set",
+  "sa",
+  "sa_per_set",
+  "se",
+  "digs",
+  "digs_per_set",
+  "re",
+  "tre",
+  "rec_pct",
+  "bs",
+  "ba",
+  "tb",
+  "blocks_per_set",
+  "bhe",
+];
+
+const labelMap: Record<string, string> = {
+  ms: "MS",
+  mp: "MP",
+  sp: "SP",
+  pts: "PTS",
+  pts_per_set: "PTS/S",
+  k: "K",
+  k_per_set: "K/S",
+  ae: "AE",
+  ta: "TA",
+  hit_pct: "HIT%",
+  assists: "A",
+  assists_per_set: "A/S",
+  sa: "SA",
+  sa_per_set: "SA/S",
+  se: "SE",
+  digs: "D",
+  digs_per_set: "D/S",
+  re: "RE",
+  tre: "TRE",
+  rec_pct: "Rec%",
+  bs: "BS",
+  ba: "BA",
+  tb: "TB",
+  blocks_per_set: "B/S",
+  bhe: "BHE",
+};
+
+const formatHeight = ({ value }: ValueFormatterParams): string => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+  const inches = Number(value);
+  const feet = Math.floor(inches / 12);
+  const remainder = inches % 12;
+  return `${feet}'${String(remainder).padStart(2, "0")}"`;
+};
+
+const formatNumeric = (
+  params: ValueFormatterParams,
+  header: string,
+): string => {
+  if (params.value === null || params.value === undefined) {
+    return "—";
+  }
+  const num = Number(params.value);
+  if (Number.isNaN(num)) {
+    return "—";
+  }
+  if (header.includes("%")) {
+    return `${(num * 100).toFixed(1)}%`;
+  }
+  if (header.includes("/")) {
+    return num.toFixed(2);
+  }
+  return num.toFixed(0);
+};
+
+type Props = {
+  rows: PlayerGridRow[];
+  sortField?: string;
+  sortDir?: "asc" | "desc";
+  onSortChange?: (field: string, dir: "asc" | "desc") => void;
+};
+
+const mapColIdToSortField = (colId: string): string => {
+  if (colId === "teamLabel") return "team";
+  if (colId === "conferenceLabel") return "conference";
+  if (colId === "classYear") return "class_year";
+  if (colId === "heightInches") return "height_inches";
+  return colId;
+};
+
+export function PlayersAgGrid({ rows, sortField, sortDir = "asc", onSortChange }: Props) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const columnDefs = useMemo<ColDef[]>(() => {
+    const isAsc = sortDir !== "desc";
+
+    const base: ColDef[] = [
+      {
+        field: "name",
+        headerName: "Name",
+        pinned: "left",
+        sortable: true,
+        filter: "agTextColumnFilter",
+        minWidth: 190,
+        cellClass: "ag-left-aligned-cell",
+        sort:
+          !sortField || sortField === "name"
+            ? isAsc
+              ? "asc"
+              : "desc"
+            : undefined,
+      },
+      {
+        field: "teamLabel",
+        headerName: "Team",
+        sortable: true,
+        filter: "agTextColumnFilter",
+        minWidth: 180,
+        cellClass: "ag-left-aligned-cell",
+        sort:
+          sortField === "team"
+            ? isAsc
+              ? "asc"
+              : "desc"
+            : undefined,
+      },
+      {
+        field: "conferenceLabel",
+        headerName: "Conference",
+        sortable: true,
+        filter: "agTextColumnFilter",
+        minWidth: 190,
+        cellClass: "ag-left-aligned-cell",
+        sort:
+          sortField === "conference"
+            ? isAsc
+              ? "asc"
+              : "desc"
+            : undefined,
+      },
+      {
+        field: "position",
+        headerName: "Pos",
+        sortable: true,
+        filter: "agTextColumnFilter",
+        maxWidth: 90,
+        cellClass: "ag-center-aligned-cell",
+      },
+      {
+        field: "classYear",
+        headerName: "Class",
+        sortable: true,
+        filter: "agTextColumnFilter",
+        maxWidth: 90,
+        cellClass: "ag-center-aligned-cell",
+      },
+      {
+        field: "heightInches",
+        headerName: "Height",
+        sortable: true,
+        filter: "agNumberColumnFilter",
+        maxWidth: 110,
+        cellClass: "ag-center-aligned-cell",
+        valueFormatter: formatHeight,
+      },
+    ];
+
+    const numericDefs = numericColumns.map<ColDef>((colKey) => {
+      const header = labelMap[colKey] ?? colKey.toUpperCase();
+      return {
+        field: colKey,
+        headerName: header,
+        sortable: true,
+        filter: "agNumberColumnFilter",
+        width: 80,
+        minWidth: 65,
+        maxWidth: 110,
+        cellClass: "ag-center-aligned-cell",
+        valueFormatter: (params) => formatNumeric(params, header),
+      };
+    });
+
+    return [...base, ...numericDefs];
+  }, [sortField, sortDir]);
+
+  const defaultColDef = useMemo<ColDef>(
+    () => ({
+      resizable: true,
+      suppressHeaderMenuButton: false,
+      sortable: true,
+      filter: true,
+      floatingFilter: false,
+      menuTabs: ["filterMenuTab"],
+    }),
+    [],
+  );
+
+  const handleFirstDataRendered = useCallback(
+    (event: FirstDataRenderedEvent) => {
+      const colApi = event.columnApi;
+      if (!colApi) return;
+      const baseFields = new Set([
+        "name",
+        "teamLabel",
+        "conferenceLabel",
+        "position",
+        "classYear",
+        "heightInches",
+      ]);
+      const allColumns = colApi.getAllColumns() ?? [];
+      const targetColumns = allColumns.filter((column) => {
+        if (!column) return false;
+        const colDef = column.getColDef?.();
+        const field = colDef?.field;
+        return field ? baseFields.has(field) : false;
+      });
+      if (targetColumns.length > 0) {
+        colApi.autoSizeColumns(targetColumns);
+      }
+    },
+    [],
+  );
+
+  const handleSortChanged = useCallback(
+    (event: { columnApi?: { getColumnState?: () => unknown[] } }) => {
+      if (!onSortChange) return;
+      const colState = event.columnApi?.getColumnState?.() ?? [];
+      const sortedCols = colState.filter(
+        (col) =>
+          typeof col === "object" &&
+          col !== null &&
+          "sort" in col &&
+          (col as { sort?: unknown }).sort,
+      );
+      if (sortedCols.length === 0) {
+        onSortChange("conference", "asc");
+        return;
+      }
+      const primary = sortedCols[0] as { colId?: unknown; sort?: unknown };
+      const colId = String(primary.colId ?? "");
+      const dir = primary.sort === "desc" ? "desc" : "asc";
+      const field = mapColIdToSortField(colId);
+      onSortChange(field, dir);
+    },
+    [onSortChange],
+  );
+
+  return (
+    <div
+      className="ag-theme-quartz ag-grid-container"
+      style={{ height: "100%", width: "100%" }}
+    >
+      {mounted ? (
+        <AgGridReact
+          rowData={rows}
+          columnDefs={columnDefs}
+          defaultColDef={defaultColDef}
+          suppressRowClickSelection
+          animateRows
+          suppressBrowserResizeObserver
+          onFirstDataRendered={handleFirstDataRendered}
+          onSortChanged={handleSortChanged}
+          rowHeight={28}
+          headerHeight={32}
+          style={{ width: "100%", height: "100%" }}
+        />
+      ) : (
+        <div className="card">Loading players...</div>
+      )}
+    </div>
+  );
+}
+
+export default PlayersAgGrid;

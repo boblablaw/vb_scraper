@@ -13,7 +13,7 @@ from pathlib import Path
 from .models import GuideConfig
 
 
-def build_pdf(config: GuideConfig | None = None):
+def build_pdf(config: GuideConfig | None = None, output_overridden: bool = False):
     """
     Build the guide PDF using the supplied configuration.
     """
@@ -29,7 +29,7 @@ def build_pdf(config: GuideConfig | None = None):
     pdf.PNG_DIR = pdf.LOGOS_DIR
     pdf.US_MAP_IMAGE = Path(cfg.us_map_image)
     pdf.OUTPUT_PDF = Path(cfg.output_pdf)
-    pdf.OUTPUT_PDF_WAS_OVERRIDDEN = True
+    pdf.OUTPUT_PDF_WAS_OVERRIDDEN = bool(output_overridden)
     pdf.COACHES_CACHE_PATH = Path(cfg.coaches_cache_path)
     pdf.PLAYER_SETTINGS_PATH = Path(cfg.player_settings_path) if cfg.player_settings_path else None
 

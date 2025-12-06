@@ -54,9 +54,14 @@ def apply_path_overrides(module, cfg: Dict[str, Any]):
         ("player_settings_path", "PLAYER_SETTINGS_PATH"),
     ]:
         if key in paths and getattr(module, attr, None) is not None:
+            # Respect caller-provided overrides:
+            # - Don't override output_pdf if caller set OUTPUT_PDF_WAS_OVERRIDDEN
+            if attr == "OUTPUT_PDF" and getattr(module, "OUTPUT_PDF_WAS_OVERRIDDEN", False):
+                continue
+            # - Don't override player_settings_path if caller already set it
+            if attr == "PLAYER_SETTINGS_PATH" and getattr(module, attr, None):
+                continue
             setattr(module, attr, module.ROOT_DIR / paths[key])
-            if attr == "OUTPUT_PDF":
-                setattr(module, "OUTPUT_PDF_WAS_OVERRIDDEN", True)
     # Keep PNG_DIR aligned with logos_dir
     if getattr(module, "LOGOS_DIR", None) is not None:
         module.PNG_DIR = module.LOGOS_DIR

@@ -60,9 +60,17 @@ def get_teams_with_year_urls(year: int | None = None) -> List[Dict]:
     teams = load_teams()
     for t in teams:
         team = dict(t)  # shallow copy
-        team["url"] = append_year_to_url(t.get("url", ""), year)
+        # Allow per-team opt-out from year suffix
+        if not t.get("roster_yearless"):
+            team["url"] = append_year_to_url(t.get("url", ""), year)
+        else:
+            team["url"] = t.get("url", "")
+
         if t.get("stats_url"):
-            team["stats_url"] = append_year_to_url(t.get("stats_url", ""), year)
+            if not t.get("stats_yearless"):
+                team["stats_url"] = append_year_to_url(t["stats_url"], year)
+            else:
+                team["stats_url"] = t["stats_url"]
         teams_with_year.append(team)
 
     return teams_with_year

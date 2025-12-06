@@ -2,17 +2,42 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from io import StringIO
 
+import requests
 from bs4 import BeautifulSoup, Tag
 
-from .utils import normalize_text, fetch_html, normalize_class
 from .logging_utils import get_logger
+from .playwright_control import (
+    PLAYWRIGHT_ENABLED,
+    PLAYWRIGHT_PROFILE_FETCH_LIMIT,
+    PLAYWRIGHT_PROFILE_FETCH_TIMEOUT_MS,
+    PlaywrightTimeoutError,
+    record_playwright_use,
+    should_use_playwright,
+    sync_playwright,
+)
+from .utils import normalize_text, fetch_html, normalize_class, canonical_name
 
 logger = get_logger(__name__)
+
+def _should_use_playwright() -> bool:
+    if not should_use_playwright():
+        if PLAYWRIGHT_ENABLED and PLAYWRIGHT_PROFILE_FETCH_LIMIT is not None:
+            logger.debug(
+                "Playwright profile fetch limit (%s) reached; skipping additional renders.",
+                PLAYWRIGHT_PROFILE_FETCH_LIMIT,
+            )
+        return False
+    return True
+
+PLAYER_PHOTO_DIR = Path(__file__).resolve().parent.parent / "player_photos"
+BIO_CHAR_LIMIT = 800
 
 # ===================== GENERIC CONSTANTS =====================
 
@@ -35,6 +60,10 @@ HEIGHT_RE = re.compile(
 
 def _clean(text: str | None) -> str:
     return normalize_text(text or "")
+
+
+def _strip_location_label(value: str) -> str:
+    return re.sub(r"^(Hometown|Last School)\s*", "", value, flags=re.IGNORECASE).strip()
 
 
 def _is_staff_block(tag: Tag) -> bool:
@@ -121,8 +150,349 @@ def filter_impact_players(players: List[Dict[str, str]]) -> List[Dict[str, str]]
         logger.info("Filtered %d TEAM IMPACT entries from roster parse.", removed)
     return filtered
 
+import re
+from typing import Optional
 
-def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
+def extract_personal_block(raw_text: str) -> Optional[str]:
+    """
+    Given the full bio text (like your examples), return the 'Personal' section
+    as a single string, or None if there is no Personal block.
+
+    It grabs everything after the word 'Personal' up until the next section
+    header like 'Before BYU', 'Sophomore', etc.
+    """
+    pattern = re.compile(
+        r"Personal"                        # literal heading
+        r"(?P<personal>.*?)(?="            # lazily capture everything after it, up to…
+        r"Before BYU|Sophomore|Freshman|"  # stop when any of these headers appear
+        r"Junior|Senior|$)",               # …or end of string
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    m = pattern.search(raw_text)
+    if not m:
+        return None
+
+    # Clean up spacing a bit
+    personal = m.group("personal").strip()
+    # Optional: collapse multiple spaces
+    personal = re.sub(r"\s+", " ", personal)
+    return personal or None
+
+
+def _extract_bio_from_text_block(text: str) -> str:
+    """
+    Roughly extract a bio from plain text by trimming navigation/headers and
+    starting at the 'Bio' heading when present.
+    """
+    t = normalize_text(text)
+    if not t:
+        return ""
+    lower = t.lower()
+
+    # Drop leading navigation noise
+    for marker in ("skip to main content", "scoreboard"):
+        idx = lower.find(marker)
+        if idx == 0:
+            t = t[len(marker):].strip()
+            lower = t.lower()
+
+    bio_idx = lower.find("bio")
+    if bio_idx != -1 and bio_idx < 800:
+        t = t[bio_idx + len("bio"):].strip()
+        lower = t.lower()
+        t = re.sub(r"^\s*stats\s+media\s+", "", t, flags=re.IGNORECASE)
+
+    if "athletics" in lower and lower.find("athletics") < 200:
+        t = t[lower.find("athletics") + len("athletics"):].strip()
+        lower = t.lower()
+
+    stop_candidates = [
+        lower.find("personal information"),
+        lower.find("do not sell or share my personal information"),
+    ]
+    stop_candidates = [i for i in stop_candidates if i != -1]
+    if stop_candidates:
+        stop = min(stop_candidates)
+        if stop > 0:
+            t = t[:stop].strip()
+
+    return t
+
+
+def _extract_personal_from_dom(soup: BeautifulSoup) -> str:
+    """
+    Capture the Personal section from the DOM (heading + following content).
+    Returns text with original capitalization.
+    """
+    if not soup:
+        return ""
+
+    stop_words = ("before byu", "career", "sophomore", "freshman", "junior", "senior", "season", "stats")
+    headers = soup.find_all(["h2", "h3", "h4", "p", "strong", "div"])
+    for header in headers:
+        heading_text = normalize_text(header.get_text(" ", strip=True))
+        if not heading_text or "personal" not in heading_text.lower():
+            continue
+
+        parts: List[str] = [heading_text]
+
+        for sibling in header.next_siblings:
+            if isinstance(sibling, str):
+                continue
+            if isinstance(sibling, Tag):
+                sib_text = normalize_text(sibling.get_text(" ", strip=True))
+                if not sib_text:
+                    continue
+                lower = sib_text.lower()
+                if any(word in lower for word in stop_words):
+                    break
+                parts.append(sib_text)
+                if sibling.name in ("h2", "h3", "h4"):
+                    break
+
+        if parts:
+            return " ".join(parts)
+
+    # Fallback to regex against full text
+    full_text = normalize_text(soup.get_text(" ", strip=True))
+    personal = extract_personal_block(full_text)
+    return personal or ""
+
+
+SCARD_CARD_SELECTORS = [
+    ".s-person-card.s-person-card--list",
+    ".s-person-card",
+]
+
+def _is_s_person_card_staff(card: Tag) -> bool:
+    """
+    Detect cards that belong to staff/coaching sections and skip them.
+    """
+    ancestor = card
+    while isinstance(ancestor, Tag):
+        ancestor_id = ancestor.get("id") or ""
+        if isinstance(ancestor_id, str) and "coach" in ancestor_id.lower():
+            return True
+        for cls in ancestor.get("class") or []:
+            if isinstance(cls, str) and "coaching-staff" in cls:
+                return True
+        ancestor = ancestor.parent if isinstance(ancestor.parent, Tag) else None
+    if card.select_one(".s-person-card__content__contact-det"):
+        return True
+    text = normalize_text(card.get_text(" ", strip=True)).lower()
+    if "coach" in text:
+        return True
+    return False
+
+
+def _extract_s_person_card_player(card: Tag, base_url: str) -> Dict[str, str]:
+    name_tag = card.select_one("h3")
+    name = _clean(name_tag.get_text()) if name_tag else ""
+
+    profile_link = (
+        card.select_one("[data-test-id='s-person-details__thumbnail-link']")
+        or card.select_one("[data-test-id='s-person-card-list__content-call-to-action-link']")
+    )
+    profile_url = profile_link.get("href") if profile_link and profile_link.get("href") else ""
+
+    jersey_tag = card.select_one(".s-stamp__text")
+    jersey = ""
+    if jersey_tag:
+        jersey = "".join(ch for ch in jersey_tag.get_text() if ch.isdigit())
+
+    hometown_tag = card.select_one("[data-test-id='s-person-card-list__content-location-person-hometown']")
+    high_school_tag = card.select_one("[data-test-id='s-person-card-list__content-location-person-high-school']")
+
+    photo_tag = card.select_one('img[data-test-id="s-image-resized__img"]')
+    photo_url = photo_tag.get("src") if photo_tag and photo_tag.get("src") else ""
+
+    position_tag = card.select_one("[data-test-id='s-person-details__bio-stats-person-position-short']")
+    class_tag = card.select_one("[data-test-id='s-person-details__bio-stats-person-title']")
+    height_tag = card.select_one("[data-test-id='s-person-details__bio-stats-person-season']")
+
+    return {
+        "name": name,
+        "position": _clean(position_tag.get_text()) if position_tag else "",
+        "class_raw": _clean(class_tag.get_text()) if class_tag else "",
+        "height_raw": _clean(height_tag.get_text()) if height_tag else "",
+        "profile_url": profile_url,
+        "jersey_number": jersey,
+        "hometown": _strip_location_label(_clean(hometown_tag.get_text())) if hometown_tag else "",
+        "high_school": _strip_location_label(_clean(high_school_tag.get_text())) if high_school_tag else "",
+        "photo_url": urljoin(base_url, photo_url) if photo_url else "",
+    }
+
+
+def parse_s_person_card_layout(html: str, base_url: str) -> List[Dict[str, str]]:
+    soup = BeautifulSoup(html, "html.parser")
+    cards = soup.select(", ".join(SCARD_CARD_SELECTORS))
+    cards = [card for card in cards if not _is_s_person_card_staff(card)]
+    if not cards:
+        return []
+
+    players_map: Dict[str, Dict[str, str]] = {}
+    canonical_order: List[str] = []
+    for card in cards:
+        player = _extract_s_person_card_player(card, base_url)
+        profile_url = player.get("profile_url", "")
+        if profile_url and "/roster/coaches/" in profile_url:
+            continue
+        player_name = player.get("name", "")
+        canonical_name_sig = canonical_name(player_name or "")
+        if not canonical_name_sig:
+            continue
+        existing = players_map.get(canonical_name_sig)
+        if existing:
+            if not existing.get("profile_url") and profile_url:
+                players_map[canonical_name_sig] = player
+            continue
+        players_map[canonical_name_sig] = player
+        canonical_order.append(canonical_name_sig)
+
+    players = [players_map[name] for name in canonical_order]
+    if players:
+        logger.info("Parsed %d players from s-person-card layout.", len(players))
+    return players
+
+
+def _fetch_profile_html_with_playwright(url: str, timeout_ms: int = PLAYWRIGHT_PROFILE_FETCH_TIMEOUT_MS) -> Optional[str]:
+    if not sync_playwright:
+        return None
+    record_playwright_use()
+    html: Optional[str] = None
+    browser = None
+    context = None
+    page = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+            )
+            page = context.new_page()
+            goto_timeout = max(timeout_ms, 45000)
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=goto_timeout)
+            except PlaywrightTimeoutError:
+                logger.warning("Playwright timeout loading profile (partial HTML used): %s", url)
+            # Some sites hide bio behind a tab; best-effort click the Bio tab
+            try:
+                page.get_by_role("tab", name="Bio").first.click(timeout=2500)
+            except Exception:
+                pass
+            # Wait briefly for content to settle
+            try:
+                page.wait_for_selector(
+                    ".s-bio-content, [data-test-id='s-tab-item-content'], .legacy_to_nextgen, .roster-bio__bio-content",
+                    timeout=2500,
+                )
+            except Exception:
+                page.wait_for_timeout(1000)
+            html = page.content()
+    except PlaywrightTimeoutError:
+        logger.warning("Playwright timeout loading profile: %s", url)
+    except Exception as exc:
+        logger.debug("Playwright profile fetch failed: %s", exc)
+    finally:
+        try:
+            if page:
+                page.close()
+            if context:
+                context.close()
+            if browser:
+                browser.close()
+        except Exception:
+            pass
+    return html
+
+
+def _trim_to_personal_section(text: str) -> str:
+    """
+    Return text starting at the first 'Personal' heading (any case).
+    Keeps the original capitalization from the source text.
+    """
+    if not text:
+        return text
+    m = re.search(r"personal", text, flags=re.IGNORECASE)
+    if not m:
+        return text
+    # Prefer the bounded Personal block if we can find it
+    personal_only = extract_personal_block(text)
+    if personal_only:
+        return personal_only.strip()
+    return text[m.end():].strip()
+
+
+def _strip_personal_label(text: str) -> str:
+    """
+    Remove a leading 'Personal' label if present.
+    """
+    if not text:
+        return text
+    return re.sub(r"^\s*personal[:\-]*\s*", "", text, flags=re.IGNORECASE)
+
+
+def _looks_like_social_cta(text: str) -> bool:
+    """
+    Detect social-media CTA blobs (e.g., 'Follow Instagram...') that are not bios.
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    keywords = (
+        "follow instagram",
+        "follow us",
+        "opens in a new window",
+        "facebook",
+        "twitter",
+        "x.com",
+        "tiktok",
+        "snapchat",
+        "threads.net",
+        "cookie policy",
+        "privacy policy",
+        "personal data",
+        "personal information",
+        "personalized ads",
+        "consent to",
+        "official athletics website",
+        "women's volleyball 2025",
+    )
+    return any(k in lowered for k in keywords)
+
+
+def _extract_bio_from_s_person_profile(html: str) -> str:
+    # Temporarily disabled bio scraping; return empty string.
+    return ""
+
+
+def _extract_photo_from_profile_html(html: str, base_url: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    img = soup.select_one('img[data-test-id="s-image-resized__img"]')
+    if not img:
+        return ""
+    src = img.get("data-src") or img.get("src") or ""
+    return urljoin(base_url, src)
+
+
+def _augment_profile_with_playwright(detail: Dict[str, str], profile_url: str) -> Dict[str, str]:
+    if not profile_url or not _should_use_playwright():
+        return detail
+    rendered_html = _fetch_profile_html_with_playwright(profile_url)
+    if not rendered_html:
+        return detail
+    # Bio scraping temporarily disabled.
+    photo = _extract_photo_from_profile_html(rendered_html, profile_url)
+    if photo and not detail.get("photo_url"):
+        detail["photo_url"] = photo
+    return detail
+
+
+def parse_sidearm_player_profile(html: str, base_url: str = "") -> Dict[str, str]:
     """
     Parse a Sidearm player profile page for position / class / height.
     Some schools (e.g., Bradley) omit these on the roster list but include
@@ -135,40 +505,38 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
         bad.decompose()
     details: Dict[str, str] = {}
 
+    def set_if_empty(key: str, value: str) -> None:
+        val = normalize_text(value or "")
+        if val and not details.get(key):
+            details[key] = val
+
     # Common header fields on profile pages
     if not details.get("position"):
         pos_tag = soup.select_one(
             ".sidearm-roster-player-position, .sidearm-player-position, .roster-bio-position"
         )
         if pos_tag:
-            val = normalize_text(pos_tag.get_text())
-            if val:
-                details["position"] = val
+            set_if_empty("position", pos_tag.get_text())
     if not details.get("position"):
         # Some sites use a flex container with the sport appended
         pos_container = soup.select_one(".s-person-details__position div")
         if pos_container:
-            val = normalize_text(pos_container.get_text())
-            if val:
-                details["position"] = val
+            set_if_empty("position", pos_container.get_text())
 
     if not details.get("class_raw"):
         class_tag = soup.select_one(
             ".sidearm-roster-player-academic-year, .sidearm-player-academic-year, .roster-bio-class"
         )
         if class_tag:
-            val = normalize_text(class_tag.get_text())
-            if val:
-                details["class_raw"] = val
+            set_if_empty("class_raw", class_tag.get_text())
     if not details.get("class_raw"):
         # Sidearm sometimes renders screen-reader-only label followed by value span
         for node in soup.find_all(string=lambda t: isinstance(t, str) and "Academic Year" in t):
             parent = node.parent
             sib = parent.find_next_sibling()
             if sib:
-                val = normalize_text(sib.get_text())
-                if val:
-                    details["class_raw"] = val
+                set_if_empty("class_raw", sib.get_text())
+                if details.get("class_raw"):
                     break
 
     if not details.get("height_raw"):
@@ -176,19 +544,68 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
             ".sidearm-roster-player-height, .sidearm-player-height, .roster-bio-height"
         )
         if height_tag:
-            val = normalize_text(height_tag.get_text())
-            if val:
-                details["height_raw"] = val
+            set_if_empty("height_raw", height_tag.get_text())
     if not details.get("height_raw"):
-        # Profile fields item blocks e.g., <small class="profile-fields-item__label">Height</small><span class="profile-fields-item__value">6-0</span>
+        # Profile fields item blocks (e.g., <small class="profile-fields-item__label">Height</small><span class="profile-fields-item__value">6-0</span>)
         for label in soup.select(".profile-fields-item__label"):
             if normalize_text(label.get_text()).lower() == "height":
                 val_tag = label.find_next_sibling(class_="profile-fields-item__value")
                 if val_tag:
-                    val = normalize_text(val_tag.get_text())
-                    if val:
-                        details["height_raw"] = val
+                    set_if_empty("height_raw", val_tag.get_text())
+                    if details.get("height_raw"):
                         break
+    # Profile fields generic parsing (position, class, hometown, high school)
+    for label in soup.select(".profile-fields-item__label"):
+        label_text = normalize_text(label.get_text())
+        label_lower = label_text.lower()
+        value_tag = label.find_next_sibling(class_="profile-fields-item__value")
+        if not value_tag:
+            continue
+        value_text = normalize_text(value_tag.get_text())
+        if not value_text:
+            continue
+        if "position" in label_lower and not details.get("position"):
+            details["position"] = value_text
+        elif ("class" in label_lower or "academic year" in label_lower) and not details.get("class_raw"):
+            details["class_raw"] = value_text
+        elif "hometown" in label_lower and not details.get("hometown"):
+            details["hometown"] = value_text
+        elif any(word in label_lower for word in ("high school", "previous school", "last school")) and not details.get("high_school"):
+            details["high_school"] = value_text
+        elif "height" in label_lower and not details.get("height_raw"):
+            details["height_raw"] = value_text
+
+    if not details.get("jersey_number"):
+        jersey_tag = soup.select_one(
+            ".sidearm-roster-player-jersey-number, .sidearm-player-jersey-number, .roster-bio-jersey-number, .s-person-details__jersey-number"
+        )
+        if jersey_tag:
+            set_if_empty("jersey_number", jersey_tag.get_text())
+
+    # Hometown / High School fallback selectors
+    hometown_selectors = [
+        ".sidearm-roster-player-hometown",
+        ".roster-bio-hometown",
+        ".s-person-details__hometown",
+        ".profile-fields-item__value--hometown",
+    ]
+    for sel in hometown_selectors:
+        tag = soup.select_one(sel)
+        if tag:
+            set_if_empty("hometown", tag.get_text())
+            break
+
+    hs_selectors = [
+        ".sidearm-roster-player-highschool",
+        ".sidearm-roster-player-high-school",
+        ".roster-bio-highschool",
+        ".profile-fields-item__value--highschool",
+    ]
+    for sel in hs_selectors:
+        tag = soup.select_one(sel)
+        if tag:
+            set_if_empty("high_school", tag.get_text())
+            break
 
     for dl in soup.find_all("dl"):
         label_tag = dl.find("dt")
@@ -207,6 +624,35 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
             details["class_raw"] = value
         elif "height" in label and "height_raw" not in details:
             details["height_raw"] = value
+        elif "hometown" in label and "hometown" not in details:
+            details["hometown"] = value
+        elif ("high school" in label or "previous school" in label or "last school" in label) and "high_school" not in details:
+            details["high_school"] = value
+        elif "jersey" in label and "jersey_number" not in details:
+            details["jersey_number"] = value
+
+    # Bio text
+    # Bio scraping temporarily disabled.
+
+    # Player photo
+    photo_selectors = [
+        ".sidearm-roster-player-image img",
+        ".sidearm-player-image img",
+        ".roster-bio-image img",
+        "img.sidearm-roster-player-image",
+    ]
+    photo_url = ""
+    for sel in photo_selectors:
+        img = soup.select_one(sel)
+        if img and (img.get("src") or img.get("data-src")):
+            photo_url = img.get("data-src") or img.get("src") or ""
+            break
+    if not photo_url:
+        og = soup.find("meta", attrs={"property": "og:image"})
+        if og and og.get("content"):
+            photo_url = og.get("content")
+    if photo_url:
+        details["photo_url"] = urljoin(base_url, photo_url)
 
     return details
 
@@ -214,14 +660,16 @@ def parse_sidearm_player_profile(html: str) -> Dict[str, str]:
 def enrich_from_player_profiles(players: List[Dict[str, str]], base_url: str) -> List[Dict[str, str]]:
     """
     For rosters that only list names, fetch individual player profile pages (when provided)
-    to fill position / class / height.
+    to fill position / class / height and additional bio fields.
     """
     enriched = 0
     for p in players:
         needs_position = not p.get("position")
         needs_class = (not p.get("class_raw")) or (normalize_class(p.get("class_raw", "")) == "")
         needs_height = not p.get("height_raw")
-        if not (needs_position or needs_class or needs_height):
+        needs_extra = not (p.get("jersey_number") and p.get("hometown") and p.get("high_school"))
+        needs_profile = not (p.get("bio") and p.get("photo_url"))
+        if not (needs_position or needs_class or needs_height or needs_extra or needs_profile):
             continue
 
         profile_url = p.get("profile_url")
@@ -229,13 +677,14 @@ def enrich_from_player_profiles(players: List[Dict[str, str]], base_url: str) ->
             continue
 
         full_url = urljoin(base_url, profile_url)
+        profile_html = None
         try:
             profile_html = fetch_html(full_url)
         except Exception as e:
             logger.debug("Could not fetch profile %s: %s", full_url, e)
-            continue
 
-        detail = parse_sidearm_player_profile(profile_html)
+        detail = parse_sidearm_player_profile(profile_html or "", base_url)
+        detail = _augment_profile_with_playwright(detail, full_url)
         filled = False
         if needs_position and detail.get("position"):
             p["position"] = detail["position"]
@@ -246,6 +695,10 @@ def enrich_from_player_profiles(players: List[Dict[str, str]], base_url: str) ->
         if needs_height and detail.get("height_raw"):
             p["height_raw"] = detail["height_raw"]
             filled = True
+        for key in ("jersey_number", "hometown", "high_school", "photo_url"):
+            if detail.get(key) and not p.get(key):
+                p[key] = detail[key]
+                filled = True
 
         if filled:
             enriched += 1
@@ -336,6 +789,13 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
         )
         height_raw = _clean(height_tag.get_text()) if height_tag else ""
 
+        jersey_tag = (
+            card.find(class_="sidearm-roster-player-jersey-number")
+            or card.find(class_="sidearm-roster-player-jersey")
+            or card.find(class_=re.compile("jersey", re.I))
+        )
+        jersey_number = _clean(jersey_tag.get_text()) if jersey_tag else ""
+
         if not name:
             continue
 
@@ -353,6 +813,7 @@ def parse_sidearm_card_layout(soup: BeautifulSoup) -> List[Dict[str, str]]:
                 "class_raw": class_raw,
                 "height_raw": height_raw,
                 "profile_url": profile_url,
+                "jersey_number": jersey_number,
             }
         )
 
@@ -397,6 +858,7 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
         pos_idx = find_col(["pos", "position"])
         class_idx = find_col(["class", "year", "yr", "eligibility", "cl"])
         height_idx = find_col(["ht", "height"])
+        number_idx = find_col(["#", "number", "jersey"])
 
         if name_idx is None or pos_idx is None:
             continue
@@ -431,6 +893,10 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
             position = get(pos_idx)
             class_raw = get(class_idx)
             height_raw = get(height_idx)
+            jersey_raw = get(number_idx)
+            jersey_number = ""
+            if jersey_raw:
+                jersey_number = "".join(ch for ch in jersey_raw if ch.isdigit())
 
             # Staff filter: skip obvious staff/coaches rows
             lower_row = " ".join(texts).lower()
@@ -464,6 +930,7 @@ def parse_sidearm_table(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     "class_raw": class_raw,
                     "height_raw": height_raw,
                     "profile_url": profile_url,
+                    "jersey_number": jersey_number,
                 }
             )
 
@@ -831,6 +1298,39 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                         height_raw = ""
                     if looks_like_club_name(class_raw):
                         class_raw = ""
+
+                    jersey_candidates = [
+                        resolve(player_obj.get("jersey_number")),
+                        resolve(player_info.get("jersey_number")) if isinstance(player_info, dict) else "",
+                        resolve(player_obj.get("jersey_number_label")),
+                    ]
+                    jersey_number = ""
+                    for val in jersey_candidates:
+                        if val not in (None, ""):
+                            jersey_number = _clean(str(val))
+                            if jersey_number:
+                                break
+                    hometown = _clean(resolve(player_info.get("hometown", ""))) if isinstance(player_info, dict) else ""
+                    high_school = ""
+                    if isinstance(player_info, dict):
+                        high_school = _clean(
+                            resolve(player_info.get("high_school") or player_info.get("previous_school") or "")
+                        )
+                    photo_url = ""
+                    photo_obj = resolve(player_obj.get("photo"))
+                    if isinstance(photo_obj, dict):
+                        photo_url = _clean(resolve(photo_obj.get("url", "")) or "")
+                    if not photo_url and isinstance(player_info, dict):
+                        master_photo = resolve(player_info.get("master_photo"))
+                        if isinstance(master_photo, dict):
+                            photo_url = _clean(resolve(master_photo.get("url", "")) or "")
+                    profile_url = ""
+                    slug = ""
+                    if isinstance(player_info, dict):
+                        slug = _clean(resolve(player_info.get("slug", "")))
+                    if slug:
+                        # Keep relative slug; team_analysis will urljoin with roster_url if needed
+                        profile_url = slug
                     
                     players.append({
                         "name": name,
@@ -838,6 +1338,10 @@ def parse_wmt_reference_json_roster(html: str, url: str) -> List[Dict[str, str]]
                         "class_raw": class_raw,
                         "height_raw": height_raw,
                         "profile_url": profile_url,
+                        "jersey_number": jersey_number,
+                        "hometown": hometown,
+                        "high_school": high_school,
+                        "photo_url": photo_url,
                     })
                 
                 if players:
@@ -1099,6 +1603,358 @@ def parse_roster_from_sidearm_json(html: str, url: str) -> List[Dict[str, str]]:
     return players
 
 
+LOCATION_CONTINUATION_RE = re.compile(
+    r"(,|\b(high school|academy|prep(?: school)?|school|hs)\b)", re.IGNORECASE
+)
+
+YEAR_WORDS = {
+    "fr",
+    "fr.",
+    "freshman",
+    "so",
+    "so.",
+    "sophomore",
+    "jr",
+    "jr.",
+    "junior",
+    "sr",
+    "sr.",
+    "senior",
+    "gr",
+    "gr.",
+    "graduate",
+    "r-fr",
+    "r-so",
+    "r-jr",
+    "r-sr",
+    "redshirt",
+}
+
+STATE_MAP = {
+    "alabama": "Alabama",
+    "al": "Alabama",
+    "alaska": "Alaska",
+    "ak": "Alaska",
+    "arizona": "Arizona",
+    "az": "Arizona",
+    "arkansas": "Arkansas",
+    "ar": "Arkansas",
+    "california": "California",
+    "ca": "California",
+    "colorado": "Colorado",
+    "co": "Colorado",
+    "connecticut": "Connecticut",
+    "ct": "Connecticut",
+    "delaware": "Delaware",
+    "de": "Delaware",
+    "florida": "Florida",
+    "fl": "Florida",
+    "georgia": "Georgia",
+    "ga": "Georgia",
+    "hawaii": "Hawaii",
+    "hi": "Hawaii",
+    "idaho": "Idaho",
+    "id": "Idaho",
+    "illinois": "Illinois",
+    "il": "Illinois",
+    "indiana": "Indiana",
+    "in": "Indiana",
+    "iowa": "Iowa",
+    "ia": "Iowa",
+    "kansas": "Kansas",
+    "ks": "Kansas",
+    "kentucky": "Kentucky",
+    "ky": "Kentucky",
+    "louisiana": "Louisiana",
+    "la": "Louisiana",
+    "maine": "Maine",
+    "me": "Maine",
+    "maryland": "Maryland",
+    "md": "Maryland",
+    "massachusetts": "Massachusetts",
+    "ma": "Massachusetts",
+    "michigan": "Michigan",
+    "mi": "Michigan",
+    "minnesota": "Minnesota",
+    "mn": "Minnesota",
+    "mississippi": "Mississippi",
+    "ms": "Mississippi",
+    "missouri": "Missouri",
+    "mo": "Missouri",
+    "montana": "Montana",
+    "mt": "Montana",
+    "nebraska": "Nebraska",
+    "ne": "Nebraska",
+    "nevada": "Nevada",
+    "nv": "Nevada",
+    "new hampshire": "New Hampshire",
+    "nh": "New Hampshire",
+    "new jersey": "New Jersey",
+    "nj": "New Jersey",
+    "new mexico": "New Mexico",
+    "nm": "New Mexico",
+    "new york": "New York",
+    "ny": "New York",
+    "north carolina": "North Carolina",
+    "nc": "North Carolina",
+    "north dakota": "North Dakota",
+    "nd": "North Dakota",
+    "ohio": "Ohio",
+    "oh": "Ohio",
+    "oklahoma": "Oklahoma",
+    "ok": "Oklahoma",
+    "oregon": "Oregon",
+    "or": "Oregon",
+    "pennsylvania": "Pennsylvania",
+    "pa": "Pennsylvania",
+    "rhode island": "Rhode Island",
+    "ri": "Rhode Island",
+    "south carolina": "South Carolina",
+    "sc": "South Carolina",
+    "south dakota": "South Dakota",
+    "sd": "South Dakota",
+    "tennessee": "Tennessee",
+    "tn": "Tennessee",
+    "texas": "Texas",
+    "tx": "Texas",
+    "utah": "Utah",
+    "ut": "Utah",
+    "vermont": "Vermont",
+    "vt": "Vermont",
+    "virginia": "Virginia",
+    "va": "Virginia",
+    "washington": "Washington",
+    "wa": "Washington",
+    "west virginia": "West Virginia",
+    "wv": "West Virginia",
+    "wisconsin": "Wisconsin",
+    "wi": "Wisconsin",
+    "wyoming": "Wyoming",
+    "wy": "Wyoming",
+    "district of columbia": "District of Columbia",
+    "dc": "District of Columbia",
+}
+STATE_KEYS = sorted(STATE_MAP.keys(), key=len, reverse=True)
+HS_KEYWORD_RE = re.compile(
+    r"\b(high school|academy|prep(?: school)?|school|hs)\b", re.IGNORECASE
+)
+
+
+def _extract_profile_url_from_node(node) -> str:
+    parent = getattr(node, "parent", None)
+    while parent is not None:
+        if parent.name == "a" and parent.get("href"):
+            return parent["href"]
+        parent = getattr(parent, "parent", None)
+    return ""
+
+
+def _split_state_from_text(text: str) -> tuple[str, str]:
+    remainder = text.strip()
+    if not remainder:
+        return "", ""
+    lower = remainder.lower()
+    for key in STATE_KEYS:
+        if lower.startswith(key) and (
+            len(remainder) == len(key) or remainder[len(key)] in {" ", ","}
+        ):
+            after = remainder[len(key) :].strip(" ,")
+            return STATE_MAP[key], after
+    return "", remainder
+
+
+def _split_location_details(text: str) -> tuple[str, str]:
+    details = text.strip()
+    if not details:
+        return "", ""
+    if "," in details:
+        city, remainder = [part.strip() for part in details.split(",", 1)]
+        state_name, after_state = _split_state_from_text(remainder)
+        if state_name:
+            hometown = f"{city}, {state_name}"
+            high_school = after_state
+            return hometown, high_school
+    match = HS_KEYWORD_RE.search(details)
+    if match:
+        high_school = details[match.start() :].strip(" ,")
+        hometown = details[: match.start()].strip(" ,")
+        return hometown, high_school
+    return details, ""
+
+
+LOCATION_CONTINUATION_RE = re.compile(
+    r"(,|\b(high school|academy|prep(?: school)?|school|hs)\b)", re.IGNORECASE
+)
+
+YEAR_WORDS = {
+    "fr",
+    "fr.",
+    "freshman",
+    "so",
+    "so.",
+    "sophomore",
+    "jr",
+    "jr.",
+    "junior",
+    "sr",
+    "sr.",
+    "senior",
+    "gr",
+    "gr.",
+    "graduate",
+    "r-fr",
+    "r-so",
+    "r-jr",
+    "r-sr",
+    "redshirt",
+}
+
+STATE_MAP = {
+    "alabama": "Alabama",
+    "al": "Alabama",
+    "alaska": "Alaska",
+    "ak": "Alaska",
+    "arizona": "Arizona",
+    "az": "Arizona",
+    "arkansas": "Arkansas",
+    "ar": "Arkansas",
+    "california": "California",
+    "ca": "California",
+    "colorado": "Colorado",
+    "co": "Colorado",
+    "connecticut": "Connecticut",
+    "ct": "Connecticut",
+    "delaware": "Delaware",
+    "de": "Delaware",
+    "florida": "Florida",
+    "fl": "Florida",
+    "georgia": "Georgia",
+    "ga": "Georgia",
+    "hawaii": "Hawaii",
+    "hi": "Hawaii",
+    "idaho": "Idaho",
+    "id": "Idaho",
+    "illinois": "Illinois",
+    "il": "Illinois",
+    "indiana": "Indiana",
+    "in": "Indiana",
+    "iowa": "Iowa",
+    "ia": "Iowa",
+    "kansas": "Kansas",
+    "ks": "Kansas",
+    "kentucky": "Kentucky",
+    "ky": "Kentucky",
+    "louisiana": "Louisiana",
+    "la": "Louisiana",
+    "maine": "Maine",
+    "me": "Maine",
+    "maryland": "Maryland",
+    "md": "Maryland",
+    "massachusetts": "Massachusetts",
+    "ma": "Massachusetts",
+    "michigan": "Michigan",
+    "mi": "Michigan",
+    "minnesota": "Minnesota",
+    "mn": "Minnesota",
+    "mississippi": "Mississippi",
+    "ms": "Mississippi",
+    "missouri": "Missouri",
+    "mo": "Missouri",
+    "montana": "Montana",
+    "mt": "Montana",
+    "nebraska": "Nebraska",
+    "ne": "Nebraska",
+    "nevada": "Nevada",
+    "nv": "Nevada",
+    "new hampshire": "New Hampshire",
+    "nh": "New Hampshire",
+    "new jersey": "New Jersey",
+    "nj": "New Jersey",
+    "new mexico": "New Mexico",
+    "nm": "New Mexico",
+    "new york": "New York",
+    "ny": "New York",
+    "north carolina": "North Carolina",
+    "nc": "North Carolina",
+    "north dakota": "North Dakota",
+    "nd": "North Dakota",
+    "ohio": "Ohio",
+    "oh": "Ohio",
+    "oklahoma": "Oklahoma",
+    "ok": "Oklahoma",
+    "oregon": "Oregon",
+    "or": "Oregon",
+    "pennsylvania": "Pennsylvania",
+    "pa": "Pennsylvania",
+    "rhode island": "Rhode Island",
+    "ri": "Rhode Island",
+    "south carolina": "South Carolina",
+    "sc": "South Carolina",
+    "south dakota": "South Dakota",
+    "sd": "South Dakota",
+    "tennessee": "Tennessee",
+    "tn": "Tennessee",
+    "texas": "Texas",
+    "tx": "Texas",
+    "utah": "Utah",
+    "ut": "Utah",
+    "vermont": "Vermont",
+    "vt": "Vermont",
+    "virginia": "Virginia",
+    "va": "Virginia",
+    "washington": "Washington",
+    "wa": "Washington",
+    "west virginia": "West Virginia",
+    "wv": "West Virginia",
+    "wisconsin": "Wisconsin",
+    "wi": "Wisconsin",
+    "wyoming": "Wyoming",
+    "wy": "Wyoming",
+    "district of columbia": "District of Columbia",
+    "dc": "District of Columbia",
+}
+STATE_KEYS = sorted(STATE_MAP.keys(), key=len, reverse=True)
+HS_KEYWORD_RE = re.compile(
+    r"\b(high school|academy|prep(?: school)?|school|hs)\b", re.IGNORECASE
+)
+
+
+def _split_state_from_text(text: str) -> tuple[str, str]:
+    remainder = text.strip()
+    if not remainder:
+        return "", ""
+    lower = remainder.lower()
+    for key in STATE_KEYS:
+        if lower.startswith(key) and (
+            len(remainder) == len(key) or remainder[len(key)] in {" ", ","}
+        ):
+            after = remainder[len(key) :].strip(" ,")
+            return STATE_MAP[key], after
+    return "", remainder
+
+
+def _split_location_details(details: str) -> tuple[str, str]:
+    if not details:
+        return "", ""
+    parts = details.strip().split(",", 1)
+    if len(parts) == 2:
+        city = parts[0].strip()
+        state_rest = parts[1].strip()
+        state_name, after_state = _split_state_from_text(state_rest)
+        if state_name:
+            hometown = f"{city}, {state_name}"
+            high_school = after_state
+            return hometown.strip(" ,"), high_school.strip(" ,")
+
+    match = HS_KEYWORD_RE.search(details)
+    if match:
+        high_school = details[match.start() :].strip(" ,")
+        hometown = details[: match.start()].strip(" ,")
+        return hometown, high_school
+
+    return details.strip(), ""
+
+
 # ===================== NUMBER / NAME / DETAILS TEXT ROSTER (BYU) =====================
 
 
@@ -1116,37 +1972,14 @@ def parse_number_name_details_roster(soup: BeautifulSoup) -> List[Dict[str, str]
 
     This pattern is used by BYU and other sites.
 
-    We return dicts with: name, position, class_raw, height_raw.
+    We return dicts with: name, position, class_raw, height_raw, jersey_number,
+    hometown, high_school.
     """
-    YEAR_WORDS = {
-        "fr",
-        "fr.",
-        "freshman",
-        "so",
-        "so.",
-        "sophomore",
-        "jr",
-        "jr.",
-        "junior",
-        "sr",
-        "sr.",
-        "senior",
-        "gr",
-        "gr.",
-        "graduate",
-        "r-fr",
-        "r-so",
-        "r-jr",
-        "r-sr",
-        "redshirt",
-    }
-
     def parse_details_line(details: str) -> Optional[Dict[str, str]]:
         tokens = details.split()
         if not tokens:
             return None
 
-        # Find height token (supports 6-2, 6'2, 5′11, etc.)
         height_idx: Optional[int] = None
         for idx, tok in enumerate(tokens):
             if HEIGHT_RE.match(tok):
@@ -1159,7 +1992,6 @@ def parse_number_name_details_roster(soup: BeautifulSoup) -> List[Dict[str, str]
         position = " ".join(tokens[:height_idx]).strip()
         height = tokens[height_idx].strip()
 
-        # Look for class/year token after height
         class_start: Optional[int] = None
         class_end: Optional[int] = None
         j = height_idx + 1
@@ -1193,21 +2025,31 @@ def parse_number_name_details_roster(soup: BeautifulSoup) -> List[Dict[str, str]
             "class_raw": _clean(class_raw),
         }
 
-    lines = [normalize_text(t) for t in soup.stripped_strings]
+    lines = [
+        (normalize_text(str(text)), text)
+        for text in soup.stripped_strings
+        if normalize_text(text)
+    ]
     players: List[Dict[str, str]] = []
-
     i = 0
     n = len(lines)
-    while i < n - 2:
-        jersey = lines[i].lstrip("#")
-        # Jersey numbers: 1–2 digits, occasionally 0 or 3+ but rare
-        if jersey.isdigit() and 1 <= len(jersey) <= 2:
-            name = normalize_text(lines[i + 1]) if i + 1 < n else ""
-            details = normalize_text(lines[i + 2]) if i + 2 < n else ""
 
+    while i < n - 2:
+        jersey_line = lines[i][0]
+        jersey = jersey_line.lstrip("#")
+        if jersey.isdigit() and 1 <= len(jersey) <= 2:
+            name_text, name_node = lines[i + 1]
+            details = lines[i + 2][0]
             parsed = parse_details_line(details)
-            if parsed and name:
-                # Clean data before adding to player list
+            if parsed and name_text:
+                location_parts = [details]
+                peek = i + 3
+                while peek < n and LOCATION_CONTINUATION_RE.search(lines[peek][0]):
+                    location_parts.append(lines[peek][0])
+                    peek += 1
+                location_str = " ".join(location_parts)
+                hometown, high_school = _split_location_details(location_str)
+
                 position = clean_position_height_noise(parsed["position"])
                 height_raw = parsed["height_raw"]
                 class_raw = parsed["class_raw"]
@@ -1215,22 +2057,26 @@ def parse_number_name_details_roster(soup: BeautifulSoup) -> List[Dict[str, str]
                     height_raw = ""
                 if looks_like_club_name(class_raw):
                     class_raw = ""
-                
+
+                profile_url = _extract_profile_url_from_node(name_node)
+
                 players.append(
                     {
-                        "name": name,
+                        "name": name_text,
                         "position": position,
                         "class_raw": class_raw,
                         "height_raw": height_raw,
+                        "profile_url": profile_url,
+                        "jersey_number": jersey,
+                        "hometown": hometown,
+                        "high_school": high_school,
                     }
                 )
-                i += 3
+                i = max(peek, i + 3)
                 continue
-
         i += 1
 
     players = filter_impact_players(players)
-
     if players:
         logger.info(
             "Parsed %d players from number-name-details text roster.", len(players)
@@ -1370,9 +2216,11 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # 1) SIDEARM / NextGen cards
-    players = parse_sidearm_card_layout(soup)
+    players = parse_s_person_card_layout(html, url)
+    if not players:
+        players = parse_sidearm_card_layout(soup)
 
+    # 1) SIDEARM / NextGen cards
     # 2) SIDEARM-like tables
     if not players:
         players = parse_sidearm_table(soup)
@@ -1495,7 +2343,13 @@ def parse_roster(html: str, url: str) -> List[Dict[str, str]]:
     # 9a) Optional: WMT-specific text enrichment if we only have names
     # Optional enrichment from player profile pages when only names are present
     if any(
-        (not p.get("position") or not p.get("class_raw") or not p.get("height_raw"))
+        (
+            not p.get("position")
+            or not p.get("class_raw")
+            or not p.get("height_raw")
+            or not p.get("bio")
+            or not p.get("photo_url")
+        )
         and p.get("profile_url")
         for p in players
     ):

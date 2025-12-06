@@ -17,23 +17,6 @@ logger = get_logger(__name__)
 RPI_URL = "https://www.ncaa.com/rankings/volleyball-women/d1/ncaa-womens-volleyball-rpi"
 
 
-def _build_alias_map() -> Dict[str, str]:
-    """
-    Build team -> primary alias mapping from settings/teams.json.
-    Uses first alias that differs from the canonical name.
-    """
-    aliases: Dict[str, str] = {}
-    for t in TEAMS:
-        name = t.get("team")
-        if not name:
-            continue
-        for alias in t.get("team_name_aliases", []) or []:
-            if alias and alias != name:
-                aliases[name] = alias
-                break
-    return aliases
-
-
 def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
     """
     Fetch NCAA RPI table and build a lookup:
@@ -102,25 +85,37 @@ def build_rpi_lookup() -> Dict[str, Dict[str, str]]:
 
     lookup: Dict[str, Dict[str, str]] = {}
     
-    # Reverse the aliases dict: RPI name -> Your team name
-    alias_map = _build_alias_map()
-    rpi_to_team = {v: k for k, v in alias_map.items()}
+    # Build reverse alias map: normalized RPI name -> canonical team name
+    rpi_to_team: Dict[str, str] = {}
+    for t in TEAMS:
+        canon = normalize_text(t.get("team", ""))
+        if canon:
+            rpi_to_team[canon] = t["team"]
+        for alias in t.get("team_name_aliases", []) or []:
+            alias_norm = normalize_text(alias)
+            if alias_norm:
+                rpi_to_team[alias_norm] = t["team"]
 
     for _, row in rpi_df.iterrows():
-        raw_name = normalize_text(row["team"])
-        if not raw_name:
+        raw_name_norm = normalize_text(row["team"])
+        if not raw_name_norm:
             continue
 
-        rank = normalize_text(row.get("rank", ""))
+        rank_raw = normalize_text(row.get("rank", ""))
         record = normalize_text(row.get("record", ""))
 
+        try:
+            rank_val = int(float(rank_raw))
+        except Exception:
+            rank_val = None
+
         # Map RPI team name to your team config name using reversed aliases
-        mapped_name = rpi_to_team.get(raw_name, raw_name)
+        mapped_name = rpi_to_team.get(raw_name_norm, raw_name_norm)
         key = normalize_school_key(mapped_name)
 
         lookup[key] = {
-            "rpi_team_name": raw_name,
-            "rpi_rank": rank,
+            "rpi_team_name": raw_name_norm,
+            "rpi_rank": rank_val,
             "rpi_record": record,
         }
 

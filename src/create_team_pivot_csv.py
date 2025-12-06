@@ -6,6 +6,8 @@ import argparse
 import csv
 import re
 import os
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Set
 
 import pandas as pd
@@ -57,14 +59,17 @@ def parse_incoming_players() -> List[Dict[str, str]]:
         parts = line.split(" - ")
         if len(parts) < 3:
             continue
-        name, school, position = parts[0].strip(), parts[1].strip(), parts[2].strip()
-        if "(" in position:
-            position = position.split("(")[0].strip()
+        name, school, position_raw = parts[0].strip(), parts[1].strip(), parts[2].strip()
+
+        # Capture transfer flag from the parenthetical, then strip it for position codes.
+        is_transfer = "transfer" in position_raw.lower()
+        position = position_raw.split("(")[0].strip() if "(" in position_raw else position_raw
         players.append({
             "name": normalize_player_name(name),
             "school": school,
             "position": position,
             "conference": current_conf,
+            "is_transfer": is_transfer,
         })
 
     return players
@@ -112,6 +117,33 @@ def to_int_safe(val: Any) -> int:
         return int(float(val))
     except:
         return 0
+
+
+def _get_cached_rpi_lookup() -> Dict[str, Dict[str, str]]:
+    """
+    Try to load RPI lookup from cache; if missing, fetch and cache it.
+    """
+    cache_path = Path(EXPORT_DIR) / "rpi_lookup_cache.json"
+    if cache_path.exists():
+        try:
+            with cache_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data:
+                    logger.info("Loaded cached RPI lookup from %s", cache_path)
+                    return data
+        except Exception:
+            pass
+
+    lookup = build_rpi_lookup()
+    if lookup:
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with cache_path.open("w", encoding="utf-8") as f:
+                json.dump(lookup, f, ensure_ascii=False, indent=2)
+            logger.info("Cached RPI lookup to %s", cache_path)
+        except Exception:
+            logger.warning("Could not write RPI cache to %s", cache_path)
+    return lookup
 
 
 def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coaches=False):
@@ -169,13 +201,28 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
     }
     df = df.rename(columns=col_map)
     
+    # Build lookup of existing players (for transfers class/pos lookup)
+    player_lookup = {}
+    for _, row in df.iterrows():
+        key = normalize_player_name(str(row.get("name", "")))
+        if not key:
+            continue
+        pos_codes = extract_position_codes(str(row.get("position", "")))
+        class_norm = normalize_class(str(row.get("class", "")))
+        player_lookup[key] = {
+            "position_raw": str(row.get("position", "")),
+            "pos_codes": pos_codes,
+            "class_norm": class_norm,
+            "class_next": class_next_year(class_norm),
+        }
+
     # Parse incoming players
     logger.info("Parsing incoming players...")
     incoming_players = parse_incoming_players()
     
-    # Build RPI lookup
+    # Build RPI lookup (with cache fallback)
     logger.info("Fetching RPI data...")
-    rpi_lookup = build_rpi_lookup()
+    rpi_lookup = _get_cached_rpi_lookup()
     if rpi_lookup:
         logger.info(f"Loaded RPI data for {len(rpi_lookup)} teams")
     else:
@@ -233,12 +280,26 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
         for _, row in team_df.iterrows():
             position_raw = str(row.get("position", ""))
             pos_codes = extract_position_codes(position_raw)
-            
-            # S/DS doesn't count as setter
-            is_setter = ("S" in pos_codes) and ("DS" not in pos_codes)
-            is_pin = ("OH" in pos_codes) or ("RS" in pos_codes)
-            is_middle = "MB" in pos_codes
-            is_def = "DS" in pos_codes
+
+            has_s = "S" in pos_codes
+            has_pin = ("OH" in pos_codes) or ("RS" in pos_codes)
+            has_middle = "MB" in pos_codes
+            has_def = "DS" in pos_codes
+
+            # Treat setters only when they are pure setters or RS/S.
+            # Exclude hybrid OH/S or MB/S from the setter count.
+            is_setter = False
+            if has_s:
+                if has_middle or ("OH" in pos_codes):
+                    is_setter = False
+                elif "RS" in pos_codes:
+                    is_setter = True
+                elif not has_pin and not has_def:
+                    is_setter = True
+
+            is_pin = has_pin
+            is_middle = has_middle
+            is_def = has_def
             
             class_str = str(row.get("class", ""))
             class_norm = normalize_class(class_str)
@@ -314,7 +375,44 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                 inc_defs.append(p)
         
         def format_incoming(players):
-            return ", ".join([f"{p['name']} ({p['position']})" for p in players])
+            parts = []
+            for p in players:
+                name = p["name"]
+                pos_label = p["position"]
+                is_transfer = p.get("is_transfer", False)
+
+                class_disp = ""
+                lookup = player_lookup.get(normalize_player_name(name), {})
+                class_next = lookup.get("class_next") or lookup.get("class_norm") or ""
+                if class_next:
+                    class_disp = class_next
+                    if not class_disp.endswith("."):
+                        class_disp = f"{class_disp}."
+
+                # Prefer clean position label from codes if available
+                codes = lookup.get("pos_codes") or extract_position_codes(pos_label)
+                if "S" in codes and len(codes) == 1:
+                    pos_label_fmt = "Setter"
+                elif "MB" in codes and len(codes) == 1:
+                    pos_label_fmt = "Middle"
+                elif "OH" in codes or "RS" in codes:
+                    pos_label_fmt = "Pin"
+                elif "DS" in codes:
+                    pos_label_fmt = "Defender"
+                else:
+                    pos_label_fmt = pos_label
+
+                if is_transfer:
+                    suffix = " - Transfer"
+                    parts.append(
+                        f"{name} ({class_disp} {pos_label_fmt}{suffix})"
+                        .replace("  ", " ")
+                        .replace("( ", "(")
+                        .replace(" )", ")")
+                    )
+                else:
+                    parts.append(f"{name} ({pos_label})")
+            return ", ".join(parts)
         
         inc_setter_names = format_incoming(inc_setters)
         inc_pin_names = format_incoming(inc_pins)

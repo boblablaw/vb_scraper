@@ -30,6 +30,9 @@ MAIN_EXPORT = "exports/rosters_and_stats.csv"
 # Only add explicit mappings here if auto-matching fails
 TEAM_NAME_MAP = {
     # Add explicit overrides here if needed
+    "central_connecticut_state_university2": "Central Connecticut State University",
+    "central_connecticut_state_university3": "Central Connecticut State University",
+    "st johns roster": "St. John's University",
 }
 
 
@@ -45,6 +48,8 @@ def extract_team_from_filename(filename: str) -> str:
     base = re.sub(r"\(\d+\)$", "", base).strip()
     # Remove _stats or _stats1 suffix
     base = re.sub(r"_stats\d*$", "", base)
+    # Remove view selectors like _offensive/_defensive
+    base = re.sub(r"_(offensive|defensive|stats)$", "", base)
     return base
 
 
@@ -56,15 +61,29 @@ def parse_manual_stats_file(filepath: str) -> pd.DataFrame:
     try:
         # Read CSV with header=None to inspect structure
         df_raw = pd.read_csv(filepath, header=None)
-        
-        # Row 0 is category headers, row 1 is stat names (our actual headers)
-        # Row 2+ are data rows
-        if len(df_raw) < 2:
+
+        # Detect header row (look for Player/Name/# indicators)
+        header_row = None
+        for idx in range(min(5, len(df_raw))):
+            row_values = [
+                str(val).strip().lower() if pd.notna(val) else ""
+                for val in df_raw.iloc[idx].tolist()
+            ]
+            if not any(row_values):
+                continue
+            if any("player" in val for val in row_values) or any("name" in val for val in row_values) or "#" in row_values:
+                header_row = idx
+                break
+        if header_row is None:
+            header_row = 0
+        data_start = header_row + 1
+
+        if len(df_raw) <= header_row:
             return pd.DataFrame()
-        
-        # Use row 1 as column names, but handle duplicates and empties
-        stat_names_raw = df_raw.iloc[1].tolist()
-        
+
+        # Use detected header row as column names, but handle duplicates/empties
+        stat_names_raw = df_raw.iloc[header_row].tolist()
+
         # Detect if there's a missing column header (e.g., PTS total missing at index 5)
         # This happens in SIDEARM stats exports where a column exists but has no name
         # Look for pattern: empty column followed by stat names that don't align with data
@@ -98,8 +117,8 @@ def parse_manual_stats_file(filepath: str) -> pd.DataFrame:
                 stat_names.append(name_str)
                 seen[name_str] = 1
         
-        # Read data starting from row 2 (skip rows 0 and 1)
-        df = pd.read_csv(filepath, skiprows=2, names=stat_names)
+        # Read data starting from data_start
+        df = pd.read_csv(filepath, skiprows=data_start, names=stat_names)
         
         # If we detected an offset, rename columns based on position
         if has_offset:
@@ -215,14 +234,18 @@ def normalize_stat_column(col: str) -> str:
     # Map to internal stat names
     mapping = {
         'sp': 'sets_played',
+        's': 'sets_played',
         'mp': 'matches_played',
+        'm': 'matches_played',
         'ms': 'matches_started',
         'pts': 'points',
+        'pts_total': 'points',
         'pts/s': 'points_per_set',
         'k': 'kills',
         'k/s': 'kills_per_set',
         'e': 'attack_errors',
         'ta': 'total_attacks',
+        'ta/s': 'attack_attempts_per_set',
         'ta_recv': 'total_reception_attempts',  # TA in defensive stats means reception attempts
         'pct': 'hitting_pct',
         'rec%': 'reception_pct',
@@ -240,9 +263,17 @@ def normalize_stat_column(col: str) -> str:
         # In NCAA PDFs this appears as "TOT/S"; treat as total blocks
         'blk': 'total_blocks',
         'tot/s': 'total_blocks',
+        'tot': 'total_blocks',
         'blk/s': 'blocks_per_set',
         'be': 'ball_handling_errors',
         'bhe': 'ball_handling_errors',
+        'sa': 'aces',
+        'sa/s': 'aces_per_set',
+        'se': 'service_errors',
+        'digs': 'digs',
+        'd/s': 'digs_per_set',
+        'r': 'total_reception_attempts',
+        're': 'reception_errors',
     }
 
     return mapping.get(col, col)
@@ -359,13 +390,71 @@ def merge_stats_for_team(team_name: str, stats_files: list, main_df: pd.DataFram
                 break
         if not found:
             unmatched_stats.append(stats_name)
-    
+
+    # If nothing matched but we have stats and no roster rows, synthesize.
+    if matched == 0 and all_stats and team_players.empty:
+        print("  No roster rows for this team; synthesizing roster from stats players.")
+        main_df = main_df[~team_mask].copy()
+
+        conference = ""
+        rows = []
+        stat_col_map = {
+            'matches_started': 'MS',
+            'matches_played': 'MP',
+            'sets_played': 'SP',
+            'points': 'PTS',
+            'points_per_set': 'PTS/S',
+            'kills': 'K',
+            'kills_per_set': 'K/S',
+            'attack_errors': 'AE',
+            'total_attacks': 'TA',
+            'hitting_pct': 'HIT%',
+            'assists': 'A',
+            'assists_per_set': 'A/S',
+            'aces': 'SA',
+            'aces_per_set': 'SA/S',
+            'service_errors': 'SE',
+            'digs': 'D',
+            'digs_per_set': 'D/S',
+            'reception_errors': 'RE',
+            'total_reception_attempts': 'TRE',
+            'reception_pct': 'Rec%',
+            'block_solos': 'BS',
+            'block_assists': 'BA',
+            'total_blocks': 'TB',
+            'blocks_per_set': 'B/S',
+            'ball_handling_errors': 'BHE',
+        }
+        for stats_name, stats in all_stats.items():
+            row = {
+                "Team": team_name,
+                "Conference": conference,
+                "Name": stats_name,
+                "Position": "",
+                "Class": "",
+                "Height": "",
+            }
+            for stat_col, stat_val in stats.items():
+                csv_col = stat_col_map.get(stat_col, stat_col)
+                row[csv_col] = stat_val
+            rows.append(row)
+
+        new_df = pd.DataFrame(rows)
+        missing_cols = [c for c in main_df.columns if c not in new_df.columns]
+        for c in missing_cols:
+            new_df[c] = ""
+        new_df = new_df[main_df.columns]
+        main_df = pd.concat([main_df, new_df], ignore_index=True)
+        matched = len(rows)
+        unmatched_export = []
+        unmatched_stats = []
+
     print(f"  Matched {matched} players")
     if unmatched_export:
         print(f"  Export players without stats: {', '.join(str(p) for p in unmatched_export[:5])}")
     if unmatched_stats:
         print(f"  Stats players not in export: {', '.join(str(p) for p in unmatched_stats[:5])}")
-    
+
     return main_df
 
 
@@ -399,9 +488,10 @@ def main():
     for filepath in stats_files:
         team_id = extract_team_from_filename(filepath.name)
         
-        # First check explicit mapping
-        if team_id in TEAM_NAME_MAP:
-            team_name = TEAM_NAME_MAP[team_id]
+        # First check explicit mapping (case-insensitive)
+        team_id_key = team_id.lower()
+        if team_id_key in TEAM_NAME_MAP:
+            team_name = TEAM_NAME_MAP[team_id_key]
         else:
             # Try intelligent matching using normalize_school_key
             team_id_normalized = normalize_school_key(team_id)

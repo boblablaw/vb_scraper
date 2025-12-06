@@ -1,20 +1,39 @@
 # stats.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+import json
 import re
+from io import StringIO
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from io import StringIO
 from urllib.parse import urljoin
-import json
 
-from .utils import canonical_name, normalize_text
 from .logging_utils import get_logger
+from .playwright_control import (
+    PLAYWRIGHT_PROFILE_FETCH_TIMEOUT_MS,
+    PlaywrightTimeoutError,
+    record_playwright_use,
+    should_use_playwright,
+    sync_playwright,
+)
+from .utils import canonical_name, normalize_text
 
 logger = get_logger(__name__)
+
+
+_PLAYWRIGHT_STATS_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+class StatsFetchResult(NamedTuple):
+    url: str
+    tables: List[pd.DataFrame]
+    html: str | None
 
 
 def column_key(col: Any) -> str:
@@ -135,9 +154,9 @@ def fetch_wmt_stats_api(team_id: str) -> pd.DataFrame | None:
         return None
 
 
-def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
+def fetch_stats_tables(url: str) -> StatsFetchResult | None:
     """
-    Fetch a stats page and return a list of pandas DataFrames.
+    Fetch a stats page and return a StatsFetchResult.
 
     Behavior:
       0) If the URL is the ACC services endpoint (conf_stats.ashx), fetch JSON and
@@ -151,6 +170,9 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
     if not url:
         return None
 
+    def _result(tables: List[pd.DataFrame], html: str | None) -> StatsFetchResult:
+        return StatsFetchResult(url=url, tables=tables, html=html)
+
     # WMT Live Stats API (wmt.games stats pages)
     if "wmt.games" in url and "stats/season" in url:
         team_id_match = re.search("/season/(\\d+)", url)
@@ -158,9 +180,20 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
         if team_id:
             df = fetch_wmt_stats_api(team_id)
             if df is not None:
-                return [df]
+                return _result([df], None)
         else:
             logger.warning("WMT stats URL missing team id: %s", url)
+
+    # Direct WMT API endpoint
+    if "api.wmt.games" in url and "/statistics/teams/" in url:
+        team_id_match = re.search(r"/teams/(\d+)", url)
+        team_id = team_id_match.group(1) if team_id_match else None
+        if team_id:
+            df = fetch_wmt_stats_api(team_id)
+            if df is not None:
+                return _result([df], None)
+        else:
+            logger.warning("WMT API stats URL missing team id: %s", url)
 
     # BoostSport JSON service (Big Ten engage-api.boostsport.ai)
     if "boostsport.ai" in url:
@@ -176,7 +209,7 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
             players = data.get("data", [])
             if not players:
                 logger.warning("BoostSport stats JSON returned no players.")
-                return []
+                return None
 
             rows: List[Dict[str, Any]] = []
             for p in players:
@@ -217,7 +250,7 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
                 })
 
             df = pd.DataFrame(rows)
-            return [df]
+            return _result([df], None)
         except Exception as e:
             logger.warning("Failed to fetch BoostSport JSON stats: %s", e)
             return None
@@ -232,7 +265,7 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
             players = data.get("players", [])
             if not players:
                 logger.warning("ACC stats JSON returned no players.")
-                return []
+                return None
 
             rows: List[Dict[str, Any]] = []
             for p in players:
@@ -272,7 +305,7 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
                 })
 
             df = pd.DataFrame(rows)
-            return [df]
+            return _result([df], None)
         except Exception as e:
             logger.warning("Failed to fetch ACC JSON stats: %s", e)
             return None
@@ -297,17 +330,161 @@ def fetch_stats_tables(url: str) -> List[pd.DataFrame] | None:
             logger.debug("Found SIDEARM Defensive stats table.")
             out.append(defense)
         if out:
-            return out
+            return _result(out, html)
 
     # Fallback: read all tables on the page
     try:
         # Wrap literal HTML in StringIO to avoid FutureWarning
         tables = pd.read_html(StringIO(html))
         logger.info("Found %d table(s) on stats page via read_html.", len(tables))
-        return tables
+        return _result(tables, html)
     except Exception as e:
         logger.debug("Could not parse stats via read_html: %s", e)
         return None
+
+
+TABLE_SELECTOR = "table"
+
+
+def _table_html_to_dataframe(table_html: str | None) -> pd.DataFrame | None:
+    if not table_html:
+        return None
+    try:
+        return pd.read_html(StringIO(table_html))[0]
+    except Exception as exc:
+        logger.debug("Playwright stats table parse failed: %s", exc)
+        return None
+
+
+def _click_dropdown_option(page, option_text: str, timeout_ms: int) -> None:
+    toggle_candidates = [
+        page.locator(".s-select__selected-option").filter(
+            has_text=re.compile("Offensive|Defensive", re.I)
+        ),
+        page.locator("[data-test-id='s-select__selected-option']").filter(
+            has_text=re.compile("Offensive|Defensive", re.I)
+        ),
+        page.locator(".s-select__selected-option"),
+    ]
+
+    toggle = None
+    for candidate in toggle_candidates:
+        if candidate.count():
+            toggle = candidate.first
+            break
+    if not toggle:
+        raise RuntimeError("Could not find stats view dropdown")
+
+    toggle.click()
+    page.wait_for_timeout(250)
+
+    options = page.locator(".s-select__option-item")
+    if not options.count():
+        options = page.locator("[data-test-id='s-select__option-item']")
+
+    target = options.filter(has_text=re.compile(option_text, re.I))
+    if not target.count():
+        target = page.get_by_text(option_text, exact=False)
+
+    target.first.wait_for(state="visible", timeout=timeout_ms)
+    target.first.click()
+    page.wait_for_timeout(500)
+    page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+
+
+def _ensure_view(page, view_text: str, timeout_ms: int) -> None:
+    try:
+        current = page.locator(".s-select__selected-option__text").first.inner_text()
+    except Exception:
+        current = ""
+    if view_text.lower() in current.lower():
+        return
+    _click_dropdown_option(page, view_text, timeout_ms)
+
+
+def _scrape_playwright_table(page, view_text: str, timeout_ms: int) -> pd.DataFrame | None:
+    _ensure_view(page, view_text, timeout_ms)
+    try:
+        page.wait_for_selector(TABLE_SELECTOR, timeout=timeout_ms)
+        table_html = page.eval_on_selector(TABLE_SELECTOR, "node => node.outerHTML")
+    except Exception as exc:
+        logger.debug("Playwright table fetch failed for %s view: %s", view_text, exc)
+        return None
+    page.wait_for_timeout(400)
+    return _table_html_to_dataframe(table_html)
+
+
+def _scrape_playwright_stats_tables(url: str, timeout_ms: int) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    if not sync_playwright:
+        return None, None
+    record_playwright_use()
+    browser = None
+    context = None
+    page = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=_PLAYWRIGHT_STATS_USER_AGENT)
+            page = context.new_page()
+            page.set_default_timeout(timeout_ms)
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            page.wait_for_timeout(800)
+            offense_df = _scrape_playwright_table(page, "Offensive", timeout_ms)
+            defense_df = _scrape_playwright_table(page, "Defensive", timeout_ms)
+            return offense_df, defense_df
+    except PlaywrightTimeoutError:
+        logger.warning("Playwright timeout loading stats page: %s", url)
+    except Exception as exc:
+        logger.debug("Playwright stats fetch failed for %s: %s", url, exc)
+    finally:
+        if page:
+            try:
+                page.close()
+            except Exception:
+                pass
+        if context:
+            try:
+                context.close()
+            except Exception:
+                pass
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
+    return None, None
+
+
+def _page_has_defensive_dropdown(html: str | None) -> bool:
+    if not html:
+        return False
+    lower = html.lower()
+    markers = ["s-select__option-item", "s-select__options-list"]
+    if not any(marker in html or marker in lower for marker in markers):
+        return False
+    return "defensive" in lower and "offensive" in lower
+
+
+def _maybe_fetch_playwright_defense(
+    stats_url: str,
+    html: str | None,
+    offense_df: pd.DataFrame | None,
+    defense_df: pd.DataFrame | None,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    if defense_df is not None:
+        return offense_df, defense_df
+    if not _page_has_defensive_dropdown(html):
+        return offense_df, defense_df
+    if not should_use_playwright():
+        logger.debug("Playwright stats fetch skipped for %s (disabled or limit reached)", stats_url)
+        return offense_df, defense_df
+    logger.info("Fetching offensive+defensive stats for %s via Playwright", stats_url)
+    off_df, def_df = _scrape_playwright_stats_tables(stats_url, PLAYWRIGHT_PROFILE_FETCH_TIMEOUT_MS)
+    if off_df is not None:
+        offense_df = off_df
+    if def_df is not None:
+        defense_df = def_df
+    return offense_df, defense_df
 
 
 def pick_player_stats_table(tables: List[pd.DataFrame]) -> pd.DataFrame | None:
@@ -507,15 +684,15 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
             if not u:
                 continue
             try:
-                t = fetch_stats_tables(u)
-                if t:
+                result = fetch_stats_tables(u)
+                if result and result.tables:
                     logger.info("Fetched stats tables from %s", u)
-                    return t
+                    return result
             except Exception as e:
                 logger.debug("Stats fetch failed for %s: %s", u, e)
         return None
 
-    tables = try_tables(expand_wmt_urls([stats_url]))
+    tables_result = try_tables(expand_wmt_urls([stats_url]))
 
     # If failed, try stripping trailing year segment
     stats_page_candidates: List[str] = [stats_url]
@@ -526,11 +703,11 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
         base = stats_url[:-5]
         stats_page_candidates.append(base)
 
-    if not tables:
-        tables = try_tables(expand_wmt_urls(stats_page_candidates[1:]))
+    if not tables_result:
+        tables_result = try_tables(expand_wmt_urls(stats_page_candidates[1:]))
 
     # If still nothing, try to discover iframe src (WMT embeds) across candidate pages
-    if not tables:
+    if not tables_result:
         def discover_iframe_urls(page_url: str) -> List[str]:
             found: List[str] = []
             resp = requests.get(page_url, timeout=30)
@@ -546,7 +723,6 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                     if val and "wmt.games" in val:
                         found.append(urljoin(page_url, val))
             # Also regex-scan the full HTML for wmt.games URLs in case they are embedded in scripts
-            import re
             for m in re.findall(r"https?://wmt\\.games[^\"'\\s>]+", resp.text):
                 found.append(urljoin(page_url, m))
             # Deduplicate while preserving order
@@ -570,18 +746,14 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
                 logger.debug("Iframe stats discovery failed for %s: %s", page, e)
 
         if expanded_candidates:
-            tables = try_tables(expand_wmt_urls(expanded_candidates))
+            tables_result = try_tables(expand_wmt_urls(expanded_candidates))
 
-    if not tables:
+    if not tables_result or not tables_result.tables:
         logger.info("Stats not available for %s - continuing without stats", stats_url)
         return {}
 
-    if not tables:
-        logger.info("Stats not available for %s - continuing without stats", stats_url)
-        return {}
-
-    if not tables:
-        return {}
+    tables = tables_result.tables
+    page_html = tables_result.html
 
     offense_df_raw: pd.DataFrame | None = None
     defense_df_raw: pd.DataFrame | None = None
@@ -592,6 +764,13 @@ def build_stats_lookup(stats_url: str) -> Dict[str, Dict[str, Any]]:
             offense_df_raw = df
         if defense_df_raw is None and _looks_like_defense_table(df):
             defense_df_raw = df
+
+    offense_df_raw, defense_df_raw = _maybe_fetch_playwright_defense(
+        stats_url,
+        page_html,
+        offense_df_raw,
+        defense_df_raw,
+    )
 
     merged_df: pd.DataFrame | None = None
 

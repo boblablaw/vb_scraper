@@ -33,6 +33,7 @@ def main():
     args = parse_args()
     cfg = GuideConfig.default()
 
+    output_overridden = False
     if args.team_pivot_csv:
         cfg.team_pivot_csv = args.team_pivot_csv
     if args.rosters_stats_csv:
@@ -41,6 +42,7 @@ def main():
         cfg.logos_dir = args.logos_dir
     if args.output_pdf:
         cfg.output_pdf = args.output_pdf
+        output_overridden = True
     if args.us_map_image:
         cfg.us_map_image = args.us_map_image
     if args.coaches_cache_path:
@@ -48,7 +50,7 @@ def main():
     if args.player_settings_path:
         cfg.player_settings_path = args.player_settings_path
 
-    build_pdf(cfg)
+    build_pdf(cfg, output_overridden=output_overridden)
 
 
 if __name__ == "__main__":
