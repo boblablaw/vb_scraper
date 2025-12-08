@@ -10,11 +10,12 @@ import csv
 import sys
 import os
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path to import settings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scraper.incoming_players import parse_raw_incoming_players
+from scripts.helpers.incoming_players import parse_raw_incoming_players
 
 
 def get_incoming_players_for_year(year):
@@ -59,7 +60,7 @@ def export_to_csv(players, output_file):
 
 def get_current_year():
     """Get the year that would be automatically selected."""
-    from scripts.incoming_players_data import get_incoming_players_year
+    from scripts.helpers.incoming_players_data import get_incoming_players_year
     return get_incoming_players_year()
 
 
@@ -117,9 +118,9 @@ in the settings/ directory.
                 print(f"  - {year}")
 
             current = get_current_year()
-            print(f\"\nCurrent year (auto-selected): {current}\")
+            print(f"\nCurrent year (auto-selected): {current}")
         else:
-            print(\"No incoming_players_YYYY.txt files found\")
+            print("No incoming_players_YYYY.txt files found")
         return
     
     # Determine year to use

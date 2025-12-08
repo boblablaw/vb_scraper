@@ -166,7 +166,7 @@ def load_schools_data(path: Path | None = None):
                 "airport_drive_time": entry.get("airport_drive_time", ""),
                 "airport_notes": entry.get("airport_notes", ""),
                 "political_label": entry.get("political_label", ""),
-                "logo_map_name": entry.get("logo_map_name", ""),
+                "ncaa_logo_light": entry.get("ncaa_logo_light", ""),
                 "team_name_aliases": entry.get("team_name_aliases", []),
                 "niche_data_slug": entry.get("niche_data_slug") or _slugify(name),
                 "niche": entry.get("niche", {}),

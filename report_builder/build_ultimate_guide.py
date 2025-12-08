@@ -34,7 +34,7 @@ COACHES_CACHE_PATH = ROOT_DIR / "settings" / "coaches_cache.json"
 
 # Data files (adjust paths if your CSVs live elsewhere)
 TEAM_PIVOT_CSV = ROOT_DIR / "exports" / "team_pivot.csv"
-ROSTERS_STATS_CSV = ROOT_DIR / "exports" / "rosters_and_stats.csv"
+ROSTERS_STATS_CSV = ROOT_DIR / "exports" / "ncaa_wvb_merged_2025.csv"
 TRANSFERS_JSON = ROOT_DIR / "settings" / "transfers.json"
 
 # If a school name in this script differs from the 'team' name in the CSVs,
@@ -92,7 +92,11 @@ US_MAX_LON = -65.0
 SCHOOLS = load_schools_data()
 
 # Seed defaults for logo map, politics, airport info, and aliases from teams.json
-LOGO_MAP = {s["name"]: s.get("logo_map_name") for s in SCHOOLS if s.get("logo_map_name")}
+LOGO_MAP = {
+    s["name"]: (Path(s.get("ncaa_logo_light", "")).name if s.get("ncaa_logo_light") else "")
+    for s in SCHOOLS
+    if s.get("ncaa_logo_light")
+}
 POLITICS_LABEL_OVERRIDES = {s["name"]: s.get("political_label") for s in SCHOOLS if s.get("political_label")}
 AIRPORT_INFO = {
     s["name"]: {
@@ -510,7 +514,7 @@ def enrich_rosters_from_csv():
     """
     Attach a projected 2026 roster list to each school in SCHOOLS.
 
-    Looks in rosters_and_stats.csv for:
+    Looks in ncaa_wvb_merged_2025.csv for:
         - team
         - player/name
         - class
@@ -535,7 +539,7 @@ def enrich_rosters_from_csv():
             pivot_df = None
 
     if not ROSTERS_STATS_CSV.exists():
-        print(f"WARNING: rosters_and_stats.csv not found at {ROSTERS_STATS_CSV}. "
+        print(f"WARNING: ncaa_wvb_merged_2025.csv not found at {ROSTERS_STATS_CSV}. "
               f"Skipping roster table enrichment.")
         return
 
@@ -554,20 +558,20 @@ def enrich_rosters_from_csv():
     def _norm_name(s: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", str(s).lower()).strip()
 
-    team_col = _get_column_case_insensitive(df, ["team"])
+    team_col = _get_column_case_insensitive(df, ["team", "school"])
     if not team_col:
-        print("WARNING: rosters_and_stats.csv is missing a 'team' column; "
+        print("WARNING: ncaa_wvb_merged_2025.csv is missing a 'team' column; "
               "cannot attach rosters.")
         return
 
     name_col = _get_column_case_insensitive(df, ["name", "player", "player_name"])
     if not name_col:
-        print("WARNING: rosters_and_stats.csv is missing a player/name column; "
+        print("WARNING: ncaa_wvb_merged_2025.csv is missing a player/name column; "
               "cannot attach rosters.")
         return
-    class_col = _get_column_case_insensitive(df, ["class_2026", "class_2025", "class", "eligibility", "year"])
+    class_col = _get_column_case_insensitive(df, ["class_2026", "class_2025", "class", "yr", "eligibility", "year"])
     position_col = _get_column_case_insensitive(df, ["position", "pos"])
-    height_col = _get_column_case_insensitive(df, ["height_safe", "height", "height_display"])
+    height_col = _get_column_case_insensitive(df, ["height_safe", "height", "height_display", "ht"])
     kills_col = _get_column_case_insensitive(df, ["kills", "k"])
     assists_col = _get_column_case_insensitive(df, ["assists", "a"])
     digs_col = _get_column_case_insensitive(df, ["digs", "d"])
@@ -689,7 +693,7 @@ def ensure_logos_unzipped():
         raise FileNotFoundError(f"Could not find folder {PNG_DIR}")
 
     files = {p.name for p in PNG_DIR.iterdir() if p.is_file()}
-    missing = [fname for fname in LOGO_MAP.values() if fname not in files]
+    missing = [Path(fname).name for fname in LOGO_MAP.values() if Path(fname).name not in files]
     if missing:
         print("WARNING: These mapped filenames were not found in the folder:")
         for m in missing:

@@ -5,7 +5,7 @@ CLI wrapper for building the Ultimate Guide.
 Usage:
     python -m report_builder.cli                      # build with defaults
     python -m report_builder.cli --output exports/guide.pdf
-    python -m report_builder.cli --team-pivot path/to/team_pivot.csv --rosters path/to/rosters_and_stats.csv
+    python -m report_builder.cli --team-pivot path/to/team_pivot.csv --rosters path/to/ncaa_wvb_merged_2025.csv
 """
 
 from __future__ import annotations

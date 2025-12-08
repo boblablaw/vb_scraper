@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchTeams } from "@/lib/api";
+import { fetchConferences, fetchTeams } from "@/lib/api";
 import { getTeamLogoSrc } from "@/lib/logos";
 
 export const dynamic = "force-dynamic";
@@ -7,44 +7,65 @@ export const revalidate = 0;
 
 type TeamsPageProps = {
   searchParams?: {
+    search?: string;
     q?: string;
     conference?: string;
     state?: string;
     tier?: string;
-    page?: string;
   };
 };
 
-const PAGE_SIZE = 60;
-
-const buildQuery = (params: Record<string, string | number | undefined>) => {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== "") {
-      search.set(key, String(value));
-    }
-  });
-  const qs = search.toString();
-  return qs ? `?${qs}` : "";
-};
-
 export default async function TeamsPage({ searchParams }: TeamsPageProps) {
-  const q = searchParams?.q ?? "";
+  const search = searchParams?.search ?? searchParams?.q ?? "";
   const conference = searchParams?.conference ?? "";
   const state = searchParams?.state ?? "";
   const tier = searchParams?.tier ?? "";
-  const page = Math.max(1, Number(searchParams?.page ?? "1"));
-  const offset = (page - 1) * PAGE_SIZE;
+  const conferences = await fetchConferences();
+  const pageSize = 200;
+  let offset = 0;
+  let allResults: Awaited<ReturnType<typeof fetchTeams>>["results"] = [];
+  let total = 0;
+  let first = true;
 
-  const data = await fetchTeams({
-    search: q,
-    conference,
-    state,
-    tier,
-    limit: PAGE_SIZE,
-    offset,
+  while (true) {
+    const page = await fetchTeams({
+      search,
+      conference,
+      state,
+      tier,
+      limit: pageSize,
+      offset,
+    });
+    if (first) {
+      total = page.total;
+      first = false;
+    }
+    if (!page.results.length) {
+      break;
+    }
+    allResults = allResults.concat(page.results);
+    offset += page.limit;
+    if (allResults.length >= total) {
+      break;
+    }
+  }
+
+  const normalized = (value: string | null | undefined) =>
+    (value ?? "").toString().trim().toLowerCase();
+
+  const filteredResults = allResults.filter((team) => {
+    const matchesSearch =
+      !search ||
+      normalized(team.name).includes(normalized(search)) ||
+      normalized(team.short_name).includes(normalized(search));
+    const matchesConference =
+      !conference ||
+      normalized(team.conference?.name) === normalized(conference);
+    const matchesState =
+      !state || normalized(team.state) === normalized(state);
+    const matchesTier = !tier || normalized(team.tier) === normalized(tier);
+    return matchesSearch && matchesConference && matchesState && matchesTier;
   });
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
   return (
     <div className="teams-page">
@@ -57,23 +78,25 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
           </p>
         </div>
         <div className="stats-chip">
-          <span>{data.total}</span> teams tracked
+          <span>{filteredResults.length}</span> teams tracked
         </div>
       </div>
 
-      <form className="filters" method="get">
+      <form className="filters" method="get" action="/teams">
         <input
           type="text"
-          name="q"
+          name="search"
           placeholder="Search team name..."
-          defaultValue={q}
+          defaultValue={search}
         />
-        <input
-          type="text"
-          name="conference"
-          placeholder="Conference"
-          defaultValue={conference}
-        />
+        <select name="conference" defaultValue={conference}>
+          <option value="">All conferences</option>
+          {conferences.map((conf) => (
+            <option key={conf.id} value={conf.name}>
+              {conf.name}
+            </option>
+          ))}
+        </select>
         <input
           type="text"
           name="state"
@@ -95,7 +118,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
       </form>
 
       <div className="card-grid">
-        {data.results.map((team) => {
+        {filteredResults.map((team) => {
           const logoSrc = getTeamLogoSrc(team);
           return (
             <Link key={team.id} href={`/teams/${team.id}`} className="card">
@@ -127,39 +150,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
         })}
       </div>
 
-      <div className="pagination">
-        <span>
-          Page {page} of {totalPages}
-        </span>
-        <div className="pagination-actions">
-          <Link
-            aria-disabled={page <= 1}
-            className={`btn ${page <= 1 ? "disabled" : ""}`}
-            href={`/teams${buildQuery({
-              q,
-              conference,
-              state,
-              tier,
-              page: Math.max(1, page - 1),
-            })}`}
-          >
-            ← Prev
-          </Link>
-          <Link
-            aria-disabled={page >= totalPages}
-            className={`btn ${page >= totalPages ? "disabled" : ""}`}
-            href={`/teams${buildQuery({
-              q,
-              conference,
-              state,
-              tier,
-              page: Math.min(totalPages, page + 1),
-            })}`}
-          >
-            Next →
-          </Link>
-        </div>
-      </div>
+      {/* Pagination removed: show all teams on a single page */}
     </div>
   );
 }

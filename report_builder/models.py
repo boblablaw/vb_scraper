@@ -20,7 +20,7 @@ class GuideConfig:
         root = Path(root) if root else Path(__file__).resolve().parent.parent
         return cls(
             team_pivot_csv=root / "exports" / "team_pivot.csv",
-            rosters_stats_csv=root / "exports" / "rosters_and_stats.csv",
+            rosters_stats_csv=root / "exports" / "ncaa_wvb_merged_2025.csv",
             logos_dir=root / "report_builder" / "logos",
             output_pdf=root / "report_builder" / "exports" / "Ultimate_School_Guide_FULL_LOCAL.pdf",
             us_map_image=root / "report_builder" / "assets" / "us_map_blank.png",

@@ -1,6 +1,7 @@
 # create_team_pivot_csv.py
-# Reads simplified scraper output and calculates team-level aggregations
+# Reads merged roster/stats output and calculates team-level aggregations
 # including positional analysis, transfers, incoming players, coaches, and offense type.
+# Coaches are pulled directly from settings/teams.json (populated via fetch_coaches.py).
 
 import argparse
 import csv
@@ -12,29 +13,44 @@ from typing import Any, Dict, List, Set
 
 import pandas as pd
 
-from scripts.teams_loader import load_teams
-from settings import OUTGOING_TRANSFERS
-from scraper.utils import (
+from scripts.helpers.teams_loader import load_teams
+from settings import OUTGOING_TRANSFERS, RPI_TEAM_NAME_ALIASES
+from scripts.helpers.utils import (
     normalize_school_key,
     normalize_player_name,
     normalize_class,
     class_next_year,
     is_graduating,
     extract_position_codes,
+    normalize_text,
 )
-from scraper.coaches_cache import load_coaches_cache, get_coaches_for_team, pack_coaches_for_row
-from scraper.coaches import find_coaches_page_url, parse_coaches_from_html
-from scraper.utils import fetch_html
-from scraper.logging_utils import setup_logging, get_logger
-from scraper.rpi_lookup import build_rpi_lookup
+from scripts.helpers.coaches_cache import pack_coaches_for_row
+from scripts.helpers.logging_utils import setup_logging, get_logger
+from scripts.helpers.rpi_lookup import build_rpi_lookup
 
 logger = get_logger(__name__)
 
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-INPUT_CSV = os.path.join(EXPORT_DIR, "rosters_and_stats.csv")
+INPUT_CSV = os.path.join(EXPORT_DIR, "ncaa_wvb_merged_2025.csv")
 OUTPUT_CSV = os.path.join(EXPORT_DIR, "team_pivot.csv")
+
+RPI_ALIAS_NORMALIZED_MAP = {
+    normalize_text(alias): canonical
+    for alias, canonical in RPI_TEAM_NAME_ALIASES.items()
+    if alias
+}
+
+
+def resolve_canonical_team_name(name: str) -> str:
+    """Return the canonical team name using the alias map when available."""
+    if not name:
+        return ""
+    normalized = normalize_text(name)
+    if not normalized:
+        return ""
+    return RPI_ALIAS_NORMALIZED_MAP.get(normalized, name)
 
 
 def parse_incoming_players() -> List[Dict[str, str]]:
@@ -73,15 +89,6 @@ def parse_incoming_players() -> List[Dict[str, str]]:
         })
 
     return players
-
-
-def get_team_info(team_name: str) -> Dict[str, Any]:
-    """Get team info from settings.TEAMS."""
-    team_key = normalize_school_key(team_name)
-    for t in load_teams():
-        if normalize_school_key(t["team"]) == team_key:
-            return t
-    return {}
 
 
 def height_to_inches(height_str: str) -> float:
@@ -146,60 +153,50 @@ def _get_cached_rpi_lookup() -> Dict[str, Dict[str, str]]:
     return lookup
 
 
-def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coaches=False):
+def main(input_csv=None, output_csv=None, teams_json_path=None):
     """
     Generate team pivot CSV from scraper output.
     
     Args:
         input_csv: Input CSV file with per-player data
         output_csv: Output CSV file for team-level data
-        use_coaches_cache: If True, load coaches from cache file (default: True)
-        refresh_coaches: If True, fetch coaches live instead of using cache (default: False)
+        teams_json_path: Optional custom path to teams.json (default uses loader default)
     """
     input_csv = input_csv or INPUT_CSV
     output_csv = output_csv or OUTPUT_CSV
+    teams_data = load_teams(teams_json_path)
+    team_meta_lookup = {
+        normalize_school_key(t.get("team", "")): t for t in teams_data
+    }
+    team_coach_lookup = {
+        k: v.get("coaches", []) or [] for k, v in team_meta_lookup.items()
+    }
     
     logger.info("Reading simplified scraper output: %s", input_csv)
     
     # Read the simplified CSV
     df = pd.read_csv(input_csv)
     
-    # Normalize column names (friendly headers -> internal)
-    col_map = {
-        "Team": "team",
-        "Conference": "conference",
-        "Rank": "rank",
-        "Record": "record",
-        "Name": "name",
-        "Position": "position",
-        "Class": "class",
-        "Height": "height",
-        "MS": "matches_started",
-        "MP": "matches_played",
-        "SP": "sets_played",
-        "PTS": "points",
-        "PTS/S": "points_per_set",
-        "K": "kills",
-        "K/S": "kills_per_set",
-        "AE": "attack_errors",
-        "TA": "total_attacks",
-        "HIT%": "hitting_pct",
-        "A": "assists",
-        "A/S": "assists_per_set",
-        "SA": "aces",
-        "SA/S": "aces_per_set",
-        "SE": "service_errors",
-        "D": "digs",
-        "D/S": "digs_per_set",
-        "RE": "reception_errors",
-        "BS": "block_solos",
-        "BA": "block_assists",
-        "TB": "total_blocks",
-        "B/S": "blocks_per_set",
-        "BHE": "ball_handling_errors",
-        "Rec%": "reception_pct",
-    }
-    df = df.rename(columns=col_map)
+    # Normalize column names for merged NCAA file
+    df = df.rename(
+        columns={
+            "School": "team",       # primary team field
+            "Team": "stats_team",   # display name from stats
+            "Conference": "conference",
+            "Player": "name",
+            "Yr": "class",
+            "Pos": "position",
+            "Ht": "height",
+            "Hit Pct": "hitting_pct",
+            "Assists": "assists",
+            "Digs": "digs",
+            "Kills": "kills",
+            "PTS": "points",
+        }
+    )
+    # Default values if missing
+    if "team" not in df.columns and "stats_team" in df.columns:
+        df["team"] = df["stats_team"]
     
     # Build lookup of existing players (for transfers class/pos lookup)
     player_lookup = {}
@@ -228,19 +225,6 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
     else:
         logger.warning("No RPI data available")
     
-    # Load coaches cache (if enabled)
-    coaches_cache = {}
-    if use_coaches_cache and not refresh_coaches:
-        logger.info("Loading coaches from cache...")
-        coaches_cache = load_coaches_cache()
-        if coaches_cache:
-            logger.info(f"Loaded coaches for {len(coaches_cache)} teams from cache")
-        else:
-            logger.warning("No coaches cache found. Run 'python scripts/fetch_coaches.py' to create one.")
-            logger.info("Continuing without coaches data...")
-    elif refresh_coaches:
-        logger.info("Refresh mode: Will fetch coaches live for each team")
-    
     # Build transfer lookups
     outgoing_by_team = {}
     incoming_by_team = {}
@@ -263,19 +247,26 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
     for team_name, team_df in df.groupby("team"):
         logger.info("Processing team: %s", team_name)
         team_key = normalize_school_key(team_name)
-        team_info = get_team_info(team_name)
+        team_info = team_meta_lookup.get(team_key, {})
         
         # Get team metadata
         conference = team_df["conference"].iloc[0] if "conference" in team_df.columns else ""
         
-        # Get RPI rank and record from RPI lookup
-        rpi_data = rpi_lookup.get(team_key, {})
+        # Get RPI rank and record from RPI lookup using canonical team names
+        stats_team_name = team_df["stats_team"].iloc[0] if "stats_team" in team_df.columns else team_name
+        stats_team_canonical = resolve_canonical_team_name(stats_team_name)
+        if not stats_team_canonical:
+            stats_team_canonical = resolve_canonical_team_name(team_name)
+        if not stats_team_canonical:
+            stats_team_canonical = team_name
+        stats_team_key = normalize_school_key(stats_team_canonical)
+        rpi_data = rpi_lookup.get(stats_team_key, {}) or rpi_lookup.get(team_key, {})
         rank = rpi_data.get("rpi_rank", "")
         record = rpi_data.get("rpi_record", "")
         roster_url = team_info.get("url", "")
         stats_url = team_info.get("stats_url", "")
         
-        # Calculate positional flags for each player
+        # Calculate positional flags for each player (input already normalized)
         players_data = []
         for _, row in team_df.iterrows():
             position_raw = str(row.get("position", ""))
@@ -313,6 +304,8 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                 if normalize_player_name(xfer["name"]) == normalize_player_name(player_name):
                     is_outgoing = True
                     break
+
+            assists_val = to_int_safe(row.get("assists", 0))
             
             players_data.append({
                 "name": player_name,
@@ -327,7 +320,7 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                 "is_graduating": is_grad,
                 "is_outgoing_transfer": is_outgoing,
                 "height": str(row.get("height", "")),
-                "assists": to_int_safe(row.get("assists", 0)),
+                "assists": assists_val,
                 "kills": to_int_safe(row.get("kills", 0)),
                 "digs": to_int_safe(row.get("digs", 0)),
             })
@@ -337,6 +330,11 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
         
         # Returning by position
         ret_setters = [p for p in returning_players if p["is_setter"]]
+        # Count any returning player with meaningful assists as a setter, even if hybrid
+        ret_setters_assist_bonus = [
+            p for p in returning_players if p["assists"] >= 150 and p not in ret_setters
+        ]
+        ret_setters_extended = ret_setters + ret_setters_assist_bonus
         ret_pins = [p for p in returning_players if p["is_pin"]]
         ret_middles = [p for p in returning_players if p["is_middle"]]
         ret_defs = [p for p in returning_players if p["is_def"]]
@@ -349,7 +347,7 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                 parts.append(f"{p['name']} - {p['class_next']} ({stat_val})")
             return ", ".join(parts)
         
-        ret_setter_names = format_returning(ret_setters, "assists")
+        ret_setter_names = format_returning(ret_setters_extended, "assists")
         ret_pin_names = format_returning(ret_pins, "kills")
         ret_middle_names = format_returning(ret_middles, "kills")
         ret_def_names = format_returning(ret_defs, "digs")
@@ -420,7 +418,7 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
         inc_def_names = format_incoming(inc_defs)
         
         # Projected counts
-        proj_setter_count = len(ret_setters) + len(inc_setters)
+        proj_setter_count = len(ret_setters_extended) + len(inc_setters)
         proj_pin_count = len(ret_pins) + len(inc_pins)
         proj_middle_count = len(ret_middles) + len(inc_middles)
         proj_def_count = len(ret_defs) + len(inc_defs)
@@ -443,7 +441,7 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
                 return inches_to_height(sum(heights) / len(heights))
             return ""
         
-        avg_setter_height = avg_height(ret_setters)
+        avg_setter_height = avg_height(ret_setters_extended)
         avg_pin_height = avg_height(ret_pins)
         avg_middle_height = avg_height(ret_middles)
         avg_def_height = avg_height(ret_defs)
@@ -457,43 +455,12 @@ def main(input_csv=None, output_csv=None, use_coaches_cache=True, refresh_coache
         else:
             offense_type = "Unknown"
         
-        # Get coaches (from cache or live fetch)
+        # Get coaches from teams.json lookup
         coach_cols = {}
-        
-        if use_coaches_cache and not refresh_coaches:
-            # Use cached coaches
-            coaches = get_coaches_for_team(team_name, coaches_cache)
-            if coaches:
-                logger.debug(f"Using {len(coaches)} cached coach(es) for {team_name}")
-                coach_cols = pack_coaches_for_row(coaches)
-            else:
-                logger.debug(f"No cached coaches for {team_name}")
-                coach_cols = pack_coaches_for_row([])  # Empty coach columns
-        elif refresh_coaches and roster_url:
-            # Fetch coaches live
-            try:
-                logger.debug(f"Fetching coaches live for {team_name}")
-                roster_html = fetch_html(roster_url)
-                coaches_html = roster_html
-                
-                alt_coaches_url = find_coaches_page_url(roster_html, roster_url)
-                if alt_coaches_url:
-                    try:
-                        coaches_html = fetch_html(alt_coaches_url)
-                    except:
-                        pass
-                
-                coaches = parse_coaches_from_html(
-                    coaches_html,
-                    base_url=alt_coaches_url or roster_url,
-                    fetch_bios=False,
-                )
-                coach_cols = pack_coaches_for_row(coaches)
-            except Exception as e:
-                logger.warning("Could not fetch coaches for %s: %s", team_name, e)
-                coach_cols = pack_coaches_for_row([])  # Empty coach columns
+        coaches = team_coach_lookup.get(team_key, [])
+        if coaches:
+            coach_cols = pack_coaches_for_row(coaches)
         else:
-            # No coaches (cache disabled and not refreshing, or no URL)
             coach_cols = pack_coaches_for_row([])
         
         # Build result row
@@ -569,16 +536,9 @@ if __name__ == "__main__":
         help=f"Output CSV file (default: {OUTPUT_CSV})"
     )
     parser.add_argument(
-        "--no-cache",
-        dest="use_coaches_cache",
-        action="store_false",
-        help="Don't use coaches cache (will produce empty coach columns)"
-    )
-    parser.add_argument(
-        "--refresh-coaches",
-        dest="refresh_coaches",
-        action="store_true",
-        help="Fetch coaches live instead of using cache (slow)"
+        "--teams-json",
+        default=None,
+        help="Optional path to teams.json (default: settings/teams.json)"
     )
     args = parser.parse_args()
     
@@ -586,6 +546,5 @@ if __name__ == "__main__":
     main(
         input_csv=args.input,
         output_csv=args.output,
-        use_coaches_cache=args.use_coaches_cache,
-        refresh_coaches=args.refresh_coaches
+        teams_json_path=args.teams_json,
     )

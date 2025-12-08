@@ -4,7 +4,7 @@ This directory contains year-specific incoming players data stored as plain text
 
 ## How It Works
 
-The selector now lives in `scripts/incoming_players_data.py` (imported by `settings`). It chooses the correct text file based on date ranges:
+The selector now lives in `scripts.helpers.incoming_players_data.py` (imported by `settings`). It chooses the correct text file based on date ranges:
 
 ### Date-Based Selection Rules
 
@@ -85,7 +85,7 @@ Multiple positions can be separated by `/` (e.g., `OH/RS`, `S/DS`)
 To verify which year's data is currently being used:
 
 ```bash
-python -m scripts.incoming_players_data
+python -m scripts.helpers.incoming_players_data
 ```
 
 Current date: December 01, 2025
@@ -112,7 +112,7 @@ No code changes are needed to switch years - it happens automatically based on t
 
 1. Create next year's file (e.g., `incoming_players_data_2026.py`)
 2. Begin populating with known commitments and transfers
-3. Test: `python -m settings.incoming_players_data`
+3. Test: `python -m scripts.helpers.incoming_players_data`
 
 ### August 1 (Season Transition)
 

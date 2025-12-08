@@ -7,7 +7,7 @@ from datetime import date
 from typing import List, Dict
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
-from scripts.teams_loader import load_teams
+from .teams_loader import load_teams
 
 
 def get_season_year(today: date | None = None) -> int:

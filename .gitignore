@@ -57,5 +57,17 @@ logos/
 # Stats
 stats/
 
-# Player photos
-player_photos/
+# Assets
+assets/coaches_photos/
+assets/logos/
+assets/player_photos/
+
+# Cookies
+scripts/Cookies/
+
+# Debug
+debug_html
+scripts/debug_html/
+
+# Niche
+scripts/niche_html

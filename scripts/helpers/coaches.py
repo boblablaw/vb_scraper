@@ -167,6 +167,21 @@ def _find_bio_href(block) -> str | None:
     return None
 
 
+def _extract_photo_url(container, base_url: str | None) -> str:
+    """
+    Attempt to locate an image tag inside the container and return an absolute URL.
+    """
+    img = container.find("img")
+    if not img:
+        return ""
+
+    src = img.get("data-src") or img.get("src")
+    if not src:
+        return ""
+
+    return urljoin(base_url or "", src)
+
+
 def _enrich_with_bio(coach: dict, bio_href: str | None, base_url: str | None, fetch_bios: bool):
     """
     Optionally fetch a coach bio page and attach tenure info.
@@ -269,6 +284,7 @@ def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: 
                     phone = m_phone.group(0)
 
             bio_href = _find_bio_href(block)
+            photo_url = _extract_photo_url(block, base_url)
 
             if name:
                 coach = {
@@ -276,6 +292,7 @@ def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: 
                     "title": title,
                     "email": email,
                     "phone": phone,
+                    "photo_url": photo_url,
                 }
                 _enrich_with_bio(coach, bio_href, base_url, fetch_bios)
                 coaches.append(coach)
@@ -311,6 +328,7 @@ def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: 
                         # Look for email in remaining cells or row
                         email = ""
                         phone = ""
+                        photo_url = _extract_photo_url(row, base_url)
                         for cell in cells[2:]:
                             cell_text = normalize_text(cell.get_text())
                             if "@" in cell_text:
@@ -337,6 +355,7 @@ def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: 
                                 "title": title,
                                 "email": email,
                                 "phone": phone,
+                                "photo_url": photo_url,
                             })
                 
                 if coaches:
@@ -446,12 +465,14 @@ def parse_coaches_from_html(html: str, base_url: str | None = None, fetch_bios: 
             continue
         seen_names.add(key)
 
+        photo_url = _extract_photo_url(parent, base_url)
         coaches.append(
             {
                 "name": name,
                 "title": title_part,
                 "email": email,
                 "phone": phone,
+                "photo_url": photo_url,
             }
         )
 

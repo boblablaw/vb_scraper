@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 TEAMS_JSON = ROOT / "settings" / "teams.json"
-SCORECARD_CSV = ROOT / "external_data" / "college_scorecard_most_recent.csv"
+SCORECARD_CSV = ROOT / "settings" / "college_scorecard_most_recent.csv"
 
 
 # ------------------------- Basic helpers -------------------------

@@ -338,7 +338,21 @@ def load_teams(conn: sqlite3.Connection, path: Path, teams_data=None):
             city_state = team.get("city_state") or ""
             if "," in city_state:
                 city, state = [part.strip() for part in city_state.split(",", 1)]
-        logo_filename = (team.get("logo_map_name") or "").strip() or None
+        # Prefer NCAA logo light version for current UI
+        logo_filename = (team.get("ncaa_logo_light") or "").strip() or None
+        if logo_filename:
+            logo_filename = logo_filename.lstrip("/")
+            for prefix in ("assets/logos/", "logos/"):
+                if logo_filename.startswith(prefix):
+                    logo_filename = logo_filename[len(prefix) :]
+                    break
+        # If we have an NCAA slug but no logo filename, derive the expected light logo path
+        if not logo_filename:
+            slug = (team.get("ncaa_slug") or "").strip()
+            if slug:
+                safe_name = (team.get("team") or "").replace(" ", "_")
+                if safe_name:
+                    logo_filename = f"ncaa/{safe_name}_light.svg"
         conn.execute(
             """
             INSERT INTO teams (

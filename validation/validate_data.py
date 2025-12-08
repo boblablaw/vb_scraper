@@ -144,7 +144,7 @@ class DataValidator:
             print("✓ All raw positions successfully normalized")
             
         # Position distribution with mapping from Position Raw
-        from scraper.utils import extract_position_codes
+        from scripts.helpers.utils import extract_position_codes
         
         position_raw_mapping = defaultdict(int)
         for idx, row in self.df.iterrows():

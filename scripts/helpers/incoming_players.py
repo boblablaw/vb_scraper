@@ -56,7 +56,7 @@ def normalize_school_key(name: str) -> str:
 
 # =========================================================
 # RAW INPUT BLOCK
-#   - Now imported from settings/incoming_players_data.py
+#   - Now imported from scripts.helpers.incoming_players_data.py
 # =========================================================
 
 from settings import RAW_INCOMING_TEXT

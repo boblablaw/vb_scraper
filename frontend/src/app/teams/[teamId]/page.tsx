@@ -58,7 +58,7 @@ export default async function TeamDetailPage({
           {team.logo_filename && (
             <div className="team-logo">
               <img
-                src={`/logos/${team.logo_filename}`}
+                src={`/assets/logos/${team.logo_filename}`}
                 alt={team.short_name ?? team.name}
                 width={56}
                 height={56}

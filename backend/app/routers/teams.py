@@ -24,7 +24,7 @@ def list_teams(
     if conference:
         filters.append(
             models.Team.conference.has(
-                func.lower(models.Conference.name) == conference.lower()
+                func.lower(models.Conference.name).like(f"%{conference.lower()}%")
             )
         )
     if state:

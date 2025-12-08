@@ -5,9 +5,8 @@ Generate a personalized “Ultimate School Guide” PDF for a volleyball player.
 ## What it does
 - Loads per-player settings (`config/players/*.yml`) for name/bio, home location, and target school list.
 - Merges static defaults plus optional overrides from `config/guide.defaults.yml` and `config/guide.yml` (team name aliases, politics labels, airport info, risk notes, coach overrides).
-- Reads data:
   - `exports/team_pivot.csv` (conference, offense, RPI, record, projected setter count, vb_opp score)
-  - `exports/rosters_and_stats.csv` (roster and stats)
+  - `exports/ncaa_wvb_merged_2025.csv` (roster and stats)
   - `settings/coaches_cache.json` (staff/contact cache)
 - Computes travel (drive/flight distance/time) from the player’s home lat/lon.
 - Filters to the player’s selected schools and renders the PDF with logos, fit tables, travel matrix, and per-school pages (including roster snapshot and notes page).
@@ -19,7 +18,7 @@ Generate a personalized “Ultimate School Guide” PDF for a volleyball player.
   - Install: `pip install -r requirements.txt` (or add these to your env).
 - Data files expected at repository root unless overridden:
   - `exports/team_pivot.csv`
-  - `exports/rosters_and_stats.csv`
+  - `exports/ncaa_wvb_merged_2025.csv`
   - `settings/coaches_cache.json`
 - Assets:
 - Logos: `report_builder/logos/` (PNG files named per `logo_map` in `report_builder/config/guide.defaults.yml`)
@@ -36,7 +35,7 @@ This uses defaults: Molly Beatty player config and outputs `report_builder/expor
 python -m report_builder.cli \
   --player-settings report_builder/config/players/your_player.yml \
   --team-pivot exports/team_pivot.csv \
-  --rosters exports/rosters_and_stats.csv \
+  --rosters exports/ncaa_wvb_merged_2025.csv \
   --logos-dir report_builder/logos \
   --us-map report_builder/assets/us_map_blank.png \
   --output report_builder/exports/custom.pdf
